@@ -1,0 +1,34 @@
+# ──────────────────────────────────────────────
+# ESA project Real-Time Translator — Python dependencies
+#
+# External (not pip): FFmpeg must be on PATH for STREAM_MODE = "rtp"/"both".
+#   Windows:  winget install Gyan.FFmpeg   (or set FFMPEG_BIN in config.py)
+# ──────────────────────────────────────────────
+
+# Computer vision (contrib = LBPH face recogniser)
+opencv-contrib-python>=4.8.0
+# NumPy must stay on 1.x: pyopenjtalk (Style-Bert-VITS2) is compiled against the
+# 1.x ABI, and numba<2.5 — NumPy 2.x triggers "dtype size changed" at synthesis.
+numpy>=1.24,<2
+
+# Audio I/O
+sounddevice>=0.4.6
+
+# Voice Activity Detection
+silero-vad>=5.1
+
+# Speech-to-text (CTranslate2-optimised Whisper)
+faster-whisper>=1.0.0
+
+# Translation (Facebook NLLB-200)
+transformers>=4.35.0
+torch>=2.1.0
+sentencepiece>=0.1.99
+
+# Text-to-speech
+piper-tts>=1.2.0              # English / Hindi (fast, local)
+style-bert-vits2>=2.4.0      # Japanese / Chinese (most natural JA)
+huggingface_hub>=0.20.0     # model downloads
+
+# Resampling (engines emit different rates → unify to OUTPUT_SAMPLE_RATE)
+soxr>=0.3.7                  # optional but recommended; falls back to numpy

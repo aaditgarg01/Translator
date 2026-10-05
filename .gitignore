@@ -1,0 +1,10 @@
+venv/
+venv-mac/
+__pycache__/
+*.pyc
+.DS_Store
+*.zip
+models/
+*.pt
+*.safetensors
+*.onnx
