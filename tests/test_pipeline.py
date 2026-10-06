@@ -159,7 +159,7 @@ class ConfigurationTests(unittest.TestCase):
                 validate_config()
 
     def test_missing_voice_reports_download_command(self):
-        with patch("utils.diagnostics.os.path.isfile", return_value=False):
+        with patch.object(config, "TARGET_LANGUAGE", "English"), patch("tts.voices.Path.is_file", return_value=False):
             issues = installation_issues()
         self.assertTrue(any("download_piper_voice.py en_US-amy-medium" in issue for issue in issues))
 

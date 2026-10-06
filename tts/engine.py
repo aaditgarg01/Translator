@@ -7,8 +7,8 @@ to OUTPUT_SAMPLE_RATE and hands it to the streamer:
     translation_queue  →  TTS  →  pcm_queue   (int16 mono @ OUTPUT_SAMPLE_RATE)
 
 The engine is chosen per language by config.TTS_ROUTES:
-    Japanese / Chinese → Style-Bert-VITS2     (most natural Japanese)
-    English / Hindi    → Piper                (fast local; no Piper JA voice)
+    Configured languages → Piper (Japanese/Chinese need pronunciation extras)
+    Optional custom route → Style-Bert-VITS2
 
 Because everything is translated INTO the target language, in practice one
 engine is used per run — but routing keeps it correct if you go bidirectional.

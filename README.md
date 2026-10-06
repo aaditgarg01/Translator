@@ -4,10 +4,52 @@ Local speech translation with optional face recognition and audio streaming.
 Microphone → speech detection → faster-whisper → NLLB translation → Piper or
 Style-Bert-VITS2 → speaker and/or FFmpeg RTP.
 
-The default target is **English**, the source is detected automatically, and
-output plays through your local speaker. English, Hindi and Japanese are the
-configured languages. Models download during setup/first use; inference then
-runs locally from the downloaded files.
+The source and target are selected in `config.py` or with `--source` and
+`--target`. Ten language routes are configured: English, Hindi, Japanese,
+Chinese, Korean, Spanish, French, German, Portuguese and Arabic. Voice models
+and pronunciation assets must be downloaded for each target. Inference runs
+locally after setup; voice quality varies by model, dialect and input text.
+
+## Multilingual voice quality
+
+Install pronunciation extras and the updated French/German voices in the active
+environment (on Windows use `.\.venv\Scripts\python.exe` for `python`):
+
+```bash
+python -m pip install -r requirements-voices.txt
+python scripts/download_piper_voice.py fr_FR-siwis-medium de_DE-thorsten-high
+```
+
+French now uses Siwis; German uses the high-quality Thorsten model. These are
+single-speaker alternatives to the previous 125/236-speaker MLS models. Old
+models are kept locally, so you can switch back in `PIPER_VOICES` for comparison.
+The additional seven language routes use sentence pauses, short edge fades,
+and one volume normalization per utterance. English, Hindi and Japanese keep
+their established synthesis settings. `PIPER_PROFILES` controls speaker ID,
+speaking duration (`length_scale`) and sentence pauses.
+
+Test a voice independently from microphone capture and translation:
+
+```bash
+python scripts/test_voice.py --language German --output german-test.wav --play
+python scripts/test_voice.py --language French --output french-test.wav --play
+python scripts/test_voice.py --language Chinese --output chinese-test.wav
+```
+
+Use `--text` for your own native-language sentence and `--output-device` to
+select a speaker with `--play`. Omit `--play` to save a WAV without opening an
+audio device. Chinese may download a large pronunciation model and tokenizer on
+first use; its voice resources are kept under `models/piper/_resources`.
+Startup now checks pronunciation before listening, so missing extras are
+reported immediately. `--doctor` validates voice language and installed extras
+without loading the voice or downloading assets.
+
+If the WAV sounds smooth but live playback stutters, check the output-device
+selection and watch for "Speaker buffer underrun" warnings. Playback uses
+larger blocks and a robust output latency setting. This is distinct from
+pronunciation quality, which depends on the model and native-language text.
+
+For the OpenCV project direction, see [the proposed roadmap](docs/OPENCV_ROADMAP.md).
 
 ## Quick start: macOS
 
@@ -44,8 +86,8 @@ Privacy & security**. CPU inference works without CUDA; GPU acceleration is
 optional. If CUDA libraries fail to load, use `--cpu`.
 
 Do not copy a virtual environment between macOS and Windows. Run setup on each
-computer. Python 3.13 is supported for the core English/Hindi setup; use 3.11
-or 3.12 for the supported Japanese setup.
+computer. Python 3.11–3.13 are covered by core CI. The optional Style-Bert-VITS2 backend
+still uses a separate Python 3.11/3.12 setup.
 
 ## Commands and devices
 
@@ -86,30 +128,19 @@ Both the `.onnx` model and matching `.onnx.json` file are required in
 `models/piper/`. Downloads use certificate verification and temporary files so
 an interrupted download does not replace an existing complete file.
 
-### Japanese (optional Style-Bert-VITS2)
-
-Run setup with Python 3.11 or 3.12:
+### Japanese and Chinese (Piper)
 
 ```bash
-# macOS
-python3.12 scripts/setup.py --japanese --download-voice
-# Windows
-py -3.12 scripts/setup.py --japanese --download-voice
+python -m pip install -r requirements-voices.txt
+python scripts/download_piper_voice.py ja_JP-hi_fi_captain-medium zh_CN-chaowen-medium
+python main.py --target Japanese --source English --no-video
 ```
 
-Then use that environment:
-
-```bash
-python main.py --target Japanese --doctor
-python main.py --target Japanese --no-video
-```
-
-Alternatively, install `requirements-japanese.txt` and run
-`scripts/download_sbv2_model.py` manually. The optional requirements retain
-NumPy 1.x and a compatible OpenCV release for the Japanese native dependencies.
-BERT assets download on first use. Japanese uses a Japanese voice; a missing
-engine never silently substitutes an English voice. Japanese setup requires
-additional native dependencies and is not part of the core CI matrix.
+Japanese requires Piper's OpenJTalk extension. Chinese uses g2pW-based
+pronunciation, including its model and tokenizer on first use. A missing engine
+never substitutes an English voice. The legacy Style-Bert-VITS2 backend remains
+available through `requirements-japanese.txt` and `download_sbv2_model.py`;
+using it also requires setting that language's `TTS_ROUTES` entry to `sbv2`.
 
 ## Face registration
 

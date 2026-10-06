@@ -30,7 +30,7 @@ ENABLE_STREAM = True     # audio output (local speaker and/or RTP)
 
 # ── Language routing ─────────────────────────────────────────────────
 # Source is auto-detected by Whisper.  Everything is translated INTO this:
-# English uses the core Piper installation; Japanese needs requirements-japanese.txt.
+# Piper voices are available for all configured languages; see requirements-voices.txt.
 TARGET_LANGUAGE = "German"      # must be a key in LANGUAGE_CODES below
 # If you want a fixed source instead of auto-detect, set e.g. "Japanese".
 SOURCE_LANGUAGE = "French"
@@ -81,8 +81,8 @@ NLLB_DEVICE = "auto"                    # auto | cpu | cuda | mps
 # ── Text-to-Speech (multi-engine, routed by language) ────────────────
 # Everything is translated INTO the target language, so the TTS stage only
 # ever speaks one language per run — TTS_ROUTES picks the engine for it:
-#   • Japanese        → Style-Bert-VITS2 (most natural JA; also EN/ZH)
-#   • English / Hindi → Piper           (fast local; Piper has no JA voice)
+#   • All configured languages use Piper, with language-specific pronunciation.
+#   • Style-Bert-VITS2 remains an optional backend.
 #
 # Each engine has its own native sample rate, so every output is resampled to
 # OUTPUT_SAMPLE_RATE before reaching the stream — the streamer opens once.
@@ -108,10 +108,23 @@ PIPER_VOICES = {
     "Chinese":   os.path.join(MODELS_DIR, "piper", "zh_CN-chaowen-medium.onnx"),
     "Korean":    os.path.join(MODELS_DIR, "piper", "ko_KR-kss-medium.onnx"),
     "Spanish":   os.path.join(MODELS_DIR, "piper", "es_ES-davefx-medium.onnx"),
-    "French":    os.path.join(MODELS_DIR, "piper", "fr_FR-mls-medium.onnx"),
-    "German":    os.path.join(MODELS_DIR, "piper", "de_DE-mls-medium.onnx"),
+    "French":    os.path.join(MODELS_DIR, "piper", "fr_FR-siwis-medium.onnx"),
+    "German":    os.path.join(MODELS_DIR, "piper", "de_DE-thorsten-high.onnx"),
     "Portuguese":os.path.join(MODELS_DIR, "piper", "pt_BR-cadu-medium.onnx"),
     "Arabic":    os.path.join(MODELS_DIR, "piper", "ar_JO-kareem-medium.onnx"),
+}
+
+# Only the newly added languages use these audio profiles. The three established
+# English/Hindi/Japanese voices retain their original synthesis behavior.
+# length_scale > 1 speaks more slowly. Speaker IDs must belong to the chosen model.
+PIPER_PROFILES = {
+    "French": {"speaker_id": 0, "length_scale": 1.0, "sentence_pause_ms": 150},
+    "German": {"speaker_id": 0, "length_scale": 1.0, "sentence_pause_ms": 150},
+    "Spanish": {"length_scale": 1.05, "sentence_pause_ms": 150},
+    "Portuguese": {"length_scale": 1.05, "sentence_pause_ms": 150},
+    "Arabic": {"length_scale": 1.05, "sentence_pause_ms": 180},
+    "Korean": {"length_scale": 1.05, "sentence_pause_ms": 150},
+    "Chinese": {"length_scale": 1.0, "sentence_pause_ms": 150},
 }
 
 # Style-Bert-VITS2 (download with: python scripts/download_sbv2_model.py)

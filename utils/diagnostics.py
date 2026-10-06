@@ -54,9 +54,8 @@ def installation_issues():
         if engine == "piper":
             required.append(("piper", "piper-tts"))
             voice = config.PIPER_VOICES.get(config.TARGET_LANGUAGE)
-            if not voice or not all(os.path.isfile(voice + suffix) for suffix in ("", ".json")):
-                name = os.path.basename(voice).removesuffix(".onnx") if voice else "<voice-name>"
-                issues.append(f"Missing Piper voice/config. Run: python scripts/download_piper_voice.py {name}")
+            from tts.voices import voice_issues
+            issues.extend(voice_issues(voice, config.TARGET_LANGUAGE))
         else:
             required.append(("style_bert_vits2", "requirements-japanese.txt"))
             base = os.path.join(config.SBV2_ASSETS_DIR, config.SBV2_MODEL_NAME)

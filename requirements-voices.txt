@@ -1,0 +1,3 @@
+# Pronunciation dependencies for Japanese and Chinese Piper voices.
+-r requirements.txt
+piper-tts[ja,zh]>=1.8,<2

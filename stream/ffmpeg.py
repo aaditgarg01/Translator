@@ -28,12 +28,13 @@ class AudioStreamer:
         self._thread = None
         self._stopped = threading.Event()
         self.error = None
+        self._underflows = 0
 
     def _open_speaker(self):
         import sounddevice as sd
         self._speaker = sd.RawOutputStream(
             device=AUDIO_OUTPUT_DEVICE, samplerate=self.sample_rate,
-            channels=AUDIO_CHANNELS, dtype="int16",
+            channels=AUDIO_CHANNELS, dtype="int16", latency="high",
         )
         try:
             self._speaker.start()
@@ -144,7 +145,7 @@ class AudioStreamer:
                     self.state.set_output_active(True)
                 try:
                     # Small chunks allow prompt shutdown and keep both sinks aligned.
-                    block = max(2, int(self.sample_rate * 0.02) * 2 * AUDIO_CHANNELS)
+                    block = max(2, int(self.sample_rate * 0.05) * 2 * AUDIO_CHANNELS)
                     for offset in range(0, len(pcm), block):
                         if not self._running:
                             break
@@ -190,7 +191,12 @@ class AudioStreamer:
                 log.warning("RTP output failed; local playback continues: %s", exc)
         if self._speaker is not None:
             try:
-                self._speaker.write(pcm)
+                underflowed = self._speaker.write(pcm)
+                if underflowed:
+                    self._underflows += 1
+                    if self._underflows == 1 or self._underflows % 25 == 0:
+                        log.warning("Speaker buffer underrun (%d). If audio stutters, close CPU-heavy apps "
+                                    "or choose another output device.", self._underflows)
                 return
             except Exception as exc:
                 self._speaker.close()
