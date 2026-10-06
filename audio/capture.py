@@ -1,19 +1,15 @@
-"""
-Thread 2 — Audio.
+"""Microphone capture with VAD processing outside PortAudio's callback."""
 
-Reads the microphone at 16 kHz mono, runs frames through the VAD segmenter,
-and drops complete speech segments onto the audio queue.  It also flips the
-shared ``speech_active`` flag so the video overlay can show who is talking.
-
-This thread does nothing else — no recognition, no translation.  It just turns
-sound into "here is a finished utterance".
-"""
-
+import queue
 import threading
+
 import numpy as np
 import sounddevice as sd
 
-from config import AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, VAD_FRAME_SIZE, VAD_BACKEND
+from config import (
+    AUDIO_SAMPLE_RATE, AUDIO_CHANNELS, AUDIO_INPUT_DEVICE,
+    VAD_FRAME_SIZE, VAD_BACKEND,
+)
 from audio.vad import SpeechSegmenter
 from utils.queues import put_drop_oldest
 from utils.logging_utils import get_logger
@@ -22,74 +18,99 @@ log = get_logger("Audio")
 
 
 class AudioCapture:
-    """Owns one thread: mic → VAD → audio_queue."""
-
     def __init__(self, audio_queue, state):
         self.audio_queue = audio_queue
         self.state = state
         self.segmenter = SpeechSegmenter(backend=VAD_BACKEND)
-
-        self._stream: sd.InputStream | None = None
+        self._frames = queue.Queue(maxsize=20)
+        self._discontinuity = threading.Event()
+        self._stream = None
         self._running = False
-        self._thread: threading.Thread | None = None
-        self.error: str | None = None
+        self._thread = None
+        self.error = None
 
-    def start(self) -> None:
+    def _callback(self, indata, _frames, _time, status):
+        # No model inference or logging on the real-time audio thread.
+        if status:
+            self._discontinuity.set()
+        item = (indata[:, 0].copy(), self.state.mic_muted)
+        try:
+            self._frames.put_nowait(item)
+        except queue.Full:
+            self._discontinuity.set()
+
+    def start(self):
         if self._running:
             return
-        self._running = True
-        self._thread = threading.Thread(target=self._run, name="audio", daemon=True)
-        self._thread.start()
+        self.error = None
+        try:
+            self._stream = sd.InputStream(
+                device=AUDIO_INPUT_DEVICE, samplerate=AUDIO_SAMPLE_RATE,
+                channels=AUDIO_CHANNELS, blocksize=VAD_FRAME_SIZE,
+                dtype="float32", callback=self._callback,
+            )
+            self._stream.start()
+            self._running = True
+            self._thread = threading.Thread(target=self._run, name="audio", daemon=True)
+            self._thread.start()
+        except Exception as exc:
+            self.stop()
+            raise RuntimeError(
+                f"Cannot start microphone: {exc}. Check microphone privacy permissions "
+                "and use --list-devices / --input-device to select a microphone."
+            ) from exc
+        log.info("Microphone open @ %d Hz (%s VAD)", AUDIO_SAMPLE_RATE, self.segmenter.backend)
 
-    def stop(self) -> None:
+    def stop(self):
         self._running = False
         if self._stream is not None:
             try:
-                self._stream.stop()
                 self._stream.close()
-            except Exception:
-                pass
+            except Exception as exc:
+                log.warning("Microphone close failed: %s", exc)
+            finally:
+                self._stream = None
         if self._thread is not None:
             self._thread.join(timeout=3)
+        self.state.set_speech_active(False)
 
-    # ── thread body ──────────────────────────────────────────────────
-    def _run(self) -> None:
-        def _callback(indata, _frames, _time, status):
-            if status:
-                log.debug("stream status: %s", status)
-            self._handle_frame(indata[:, 0].copy())
-
+    def _run(self):
         try:
-            self._stream = sd.InputStream(
-                samplerate=AUDIO_SAMPLE_RATE,
-                channels=AUDIO_CHANNELS,
-                blocksize=VAD_FRAME_SIZE,
-                dtype="float32",
-                callback=_callback,
-            )
-            self._stream.start()
-            log.info("Microphone open @ %d Hz (%s VAD)", AUDIO_SAMPLE_RATE, self.segmenter.backend)
             while self._running:
-                sd.sleep(100)
+                try:
+                    frame, captured_muted = self._frames.get(timeout=0.2)
+                except queue.Empty:
+                    if not self._stream.active:
+                        raise RuntimeError("Microphone stopped or was disconnected.")
+                    continue
+                if self._discontinuity.is_set():
+                    self._discontinuity.clear()
+                    self.segmenter.reset()
+                    self.state.set_speech_active(False)
+                    # Discard stale audio after an overflow; keep latency bounded.
+                    while True:
+                        try:
+                            self._frames.get_nowait()
+                        except queue.Empty:
+                            break
+                    continue
+                self._handle_frame(frame, captured_muted)
         except Exception as exc:
-            self.error = str(exc)
-            log.error("Microphone error: %s", exc)
+            if self._running:
+                self.error = str(exc)
+                log.error("Microphone processing failed: %s", exc)
         finally:
             self._running = False
+            self.state.set_speech_active(False)
 
-    def _handle_frame(self, frame: np.ndarray) -> None:
-        # Half-duplex: while our own TTS is playing (and a short tail after),
-        # ignore the mic so we don't transcribe the speaker output (echo loop).
-        if self.state.mic_muted:
-            if self.segmenter.speaking:
-                self.segmenter.reset()
+    def _handle_frame(self, frame: np.ndarray, captured_muted=False):
+        # Remember mute state at capture time as well as processing time.
+        if captured_muted or self.state.mic_muted:
+            self.segmenter.reset()
             self.state.set_speech_active(False)
             return
-
         segment = self.segmenter.process(frame)
-        # mirror VAD state for the overlay
         self.state.set_speech_active(self.segmenter.speaking)
         if segment is not None:
-            dur = len(segment) / AUDIO_SAMPLE_RATE
-            log.info("Utterance ready (%.1fs)", dur)
+            log.info("Utterance ready (%.1fs)", len(segment) / AUDIO_SAMPLE_RATE)
             put_drop_oldest(self.audio_queue, segment)

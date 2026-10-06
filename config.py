@@ -30,9 +30,10 @@ ENABLE_STREAM = True     # audio output (local speaker and/or RTP)
 
 # ── Language routing ─────────────────────────────────────────────────
 # Source is auto-detected by Whisper.  Everything is translated INTO this:
-TARGET_LANGUAGE = "Japanese"     # must be a key in LANGUAGE_CODES below
-# If you want a fixed source instead of auto-detect, set e.g. "English".
-SOURCE_LANGUAGE = "English"
+# English uses the core Piper installation; Japanese needs requirements-japanese.txt.
+TARGET_LANGUAGE = "English"      # must be a key in LANGUAGE_CODES below
+# If you want a fixed source instead of auto-detect, set e.g. "Japanese".
+SOURCE_LANGUAGE = "auto"
 
 # ── Video / Camera ───────────────────────────────────────────────────
 CAMERA_INDEX        = 0
@@ -53,6 +54,8 @@ FACE_CAPTURE_COUNT           = 20        # frames captured during registration
 # ── Audio capture ────────────────────────────────────────────────────
 AUDIO_SAMPLE_RATE   = 16_000             # 16 kHz mono — required by Whisper + Silero
 AUDIO_CHANNELS      = 1
+AUDIO_INPUT_DEVICE  = None              # None = default, or device index/name
+AUDIO_OUTPUT_DEVICE = None              # list with: python main.py --list-devices
 VAD_FRAME_SIZE      = 512                 # Silero needs 512 samples @ 16 kHz (32 ms)
 MIC_MUTE_COOLDOWN_S = 1.0                # ignore mic this long after TTS stops (echo guard)
 
@@ -73,6 +76,7 @@ WHISPER_BEAM_SIZE    = 5
 
 # ── Translation (NLLB-200) ───────────────────────────────────────────
 NLLB_MODEL_NAME = "facebook/nllb-200-distilled-600M"
+NLLB_DEVICE = "auto"                    # auto | cpu | cuda | mps
 
 # ── Text-to-Speech (multi-engine, routed by language) ────────────────
 # Everything is translated INTO the target language, so the TTS stage only
@@ -115,7 +119,7 @@ SBV2_BERT = {
 # "local" → play through the default speaker (most reliable for a demo)
 # "rtp"   → push to an RTP endpoint via FFmpeg (open in VLC / OBS)
 # "both"  → do both
-STREAM_MODE = "both"     # "rtp" = VLC only; "both" = VLC + your speaker
+STREAM_MODE = "local"    # "rtp" = VLC only; "both" = VLC + your speaker
 RTP_HOST      = "127.0.0.1"
 RTP_PORT      = 5004
 RTP_CODEC     = "libopus"                # libopus | pcm_mulaw | aac

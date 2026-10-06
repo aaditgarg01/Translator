@@ -17,6 +17,7 @@ import cv2
 
 import config
 from video.tracking import FaceRegistry
+from video.device import open_camera
 from utils.logging_utils import get_logger
 
 log = get_logger("Register")
@@ -31,44 +32,43 @@ def main() -> None:
     ap.add_argument("--count", type=int, default=config.FACE_CAPTURE_COUNT)
     args = ap.parse_args()
 
-    cam = cv2.VideoCapture(args.camera, cv2.CAP_DSHOW)
-    if not cam.isOpened():
-        cam = cv2.VideoCapture(args.camera)
-    if not cam.isOpened():
-        log.error("Could not open camera index %d.", args.camera)
-        return
+    if args.count < 1:
+        ap.error("--count must be positive")
+    cam = open_camera(args.camera)
 
-    registry = FaceRegistry()
-    frames, last_grab = [], 0.0
-    log.info("Capturing %d face frames for '%s' (%s). Look at the camera…",
-             args.count, args.name, args.language)
+    try:
+        registry = FaceRegistry()
+        frames, last_grab = [], 0.0
+        log.info("Capturing %d face frames for '%s' (%s). Look at the camera…",
+                 args.count, args.name, args.language)
 
-    while len(frames) < args.count:
-        ok, frame = cam.read()
-        if not ok:
-            continue
-        _, rects = registry.detect(frame)
-        preview = frame.copy()
+        while len(frames) < args.count:
+            ok, frame = cam.read()
+            if not ok:
+                raise RuntimeError("Camera stopped delivering frames; check its connection.")
+            _, rects = registry.detect(frame)
+            preview = frame.copy()
 
-        now = time.time()
-        if len(rects) == 1 and now - last_grab > 0.15:
-            frames.append(frame.copy())
-            last_grab = now
-            (x, y, w, h) = rects[0]
-            cv2.rectangle(preview, (x, y), (x + w, y + h), (0, 215, 255), 2)
-        elif len(rects) != 1:
-            cv2.putText(preview, "Show exactly ONE face", (15, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+            now = time.time()
+            if len(rects) == 1 and now - last_grab > 0.15:
+                frames.append(frame.copy())
+                last_grab = now
+                (x, y, w, h) = rects[0]
+                cv2.rectangle(preview, (x, y), (x + w, y + h), (0, 215, 255), 2)
+            elif len(rects) != 1:
+                cv2.putText(preview, "Show exactly ONE face", (15, 30),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
-        cv2.putText(preview, f"Captured {len(frames)}/{args.count}", (15, 60),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 215, 255), 2)
-        cv2.imshow("Register — press q to abort", preview)
-        if (cv2.waitKey(1) & 0xFF) == ord("q"):
-            log.info("Aborted.")
-            cam.release(); cv2.destroyAllWindows()
-            return
+            cv2.putText(preview, f"Captured {len(frames)}/{args.count}", (15, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 215, 255), 2)
+            cv2.imshow("Register — press q to abort", preview)
+            if (cv2.waitKey(1) & 0xFF) == ord("q"):
+                log.info("Aborted.")
+                return
 
-    cam.release(); cv2.destroyAllWindows()
+    finally:
+        cam.release()
+        cv2.destroyAllWindows()
 
     pid, saved = registry.register_person(args.name, args.language, frames)
     if pid is None:

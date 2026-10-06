@@ -14,6 +14,7 @@ import time
 
 import cv2
 import numpy as np
+from video.device import open_camera
 
 from config import (
     CAMERA_INDEX, CAMERA_WIDTH, CAMERA_HEIGHT, VIDEO_TARGET_FPS,
@@ -43,11 +44,10 @@ class VideoCapture:
     def start(self) -> bool:
         if self._running:
             return True
-        cam = cv2.VideoCapture(self.camera_index, cv2.CAP_DSHOW)
-        if not cam.isOpened():
-            cam = cv2.VideoCapture(self.camera_index)
-        if not cam.isOpened():
-            self.error = f"Could not open camera index {self.camera_index}."
+        try:
+            cam = open_camera(self.camera_index)
+        except RuntimeError as exc:
+            self.error = str(exc)
             log.error(self.error)
             return False
         cam.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_WIDTH)

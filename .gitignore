@@ -8,3 +8,9 @@ models/
 *.pt
 *.safetensors
 *.onnx
+.venv/
+venv*/
+.pytest_cache/
+*.sdp
+# New face registrations are local data (already tracked samples are unchanged).
+data/faces/

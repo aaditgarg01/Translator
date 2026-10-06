@@ -14,9 +14,7 @@ the video overlay can render live subtitles.
 import threading
 import queue
 
-import torch
-
-from config import NLLB_MODEL_NAME, LANGUAGE_CODES, TARGET_LANGUAGE, whisper_to_name
+from config import NLLB_MODEL_NAME, NLLB_DEVICE, LANGUAGE_CODES, TARGET_LANGUAGE, whisper_to_name
 from utils.queues import put_drop_oldest
 from utils.logging_utils import get_logger
 
@@ -44,18 +42,28 @@ class Translator:
     def load(self) -> None:
         if self.model is not None:
             return
+        import torch
         from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
         log.info("Loading NLLB '%s' …", NLLB_MODEL_NAME)
         self.tokenizer = AutoTokenizer.from_pretrained(NLLB_MODEL_NAME)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(NLLB_MODEL_NAME)
-        if torch.cuda.is_available():
+        if NLLB_DEVICE != "auto":
+            self._device = NLLB_DEVICE
+        elif torch.cuda.is_available():
             self._device = "cuda"
         elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
             self._device = "mps"
         else:
             self._device = "cpu"
-        self.model.to(self._device).eval()
+        try:
+            self.model.to(self._device).eval()
+        except RuntimeError:
+            if NLLB_DEVICE != "auto" or self._device == "cpu":
+                raise
+            log.warning("NLLB device %s failed; falling back to CPU.", self._device)
+            self._device = "cpu"
+            self.model.to("cpu").eval()
         log.info("NLLB ready on %s. Target language: %s", self._device, self.target_name)
 
     # ── lifecycle ────────────────────────────────────────────────────
@@ -94,7 +102,7 @@ class Translator:
             translated = text
         elif src_nllb is None:
             log.warning("Unsupported source language '%s' — skipping.", src_whisper)
-            translated = text
+            return
         else:
             translated = self._translate(text, src_nllb, self.target_nllb)
 
@@ -113,15 +121,25 @@ class Translator:
         })
 
     def _translate(self, text: str, src_nllb: str, tgt_nllb: str) -> str:
+        import torch
         self.tokenizer.src_lang = src_nllb
         inputs = self.tokenizer(text, return_tensors="pt", padding=True,
                                 truncation=True, max_length=512)
         inputs = {k: v.to(self._device) for k, v in inputs.items()}
         tgt_id = self.tokenizer.convert_tokens_to_ids(tgt_nllb)
         with torch.no_grad():
-            out = self.model.generate(**inputs, forced_bos_token_id=tgt_id,
-                                      max_new_tokens=256, num_beams=1,
-                                      early_stopping=True)
+            try:
+                out = self.model.generate(**inputs, forced_bos_token_id=tgt_id,
+                                          max_new_tokens=256, num_beams=1)
+            except RuntimeError:
+                if NLLB_DEVICE != "auto" or self._device == "cpu":
+                    raise
+                log.warning("NLLB inference on %s failed; retrying on CPU.", self._device)
+                self._device = "cpu"
+                self.model.to("cpu").eval()
+                inputs = {k: v.to("cpu") for k, v in inputs.items()}
+                out = self.model.generate(**inputs, forced_bos_token_id=tgt_id,
+                                          max_new_tokens=256, num_beams=1)
         return self.tokenizer.decode(out[0], skip_special_tokens=True)
 
     @staticmethod

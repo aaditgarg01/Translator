@@ -1,0 +1,6 @@
+# Optional Japanese TTS. Use a Python 3.11 or 3.12 environment.
+-r requirements.txt
+# Keep the native Japanese phonemizer and NumPy on the same ABI.
+numpy>=1.26,<2
+opencv-contrib-python>=4.8,<4.12
+style-bert-vits2>=2.5,<3

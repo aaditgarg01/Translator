@@ -41,7 +41,9 @@ class TTS:
 
     # ── backends ─────────────────────────────────────────────────────
     def _engine_for(self, language: str) -> str:
-        return TTS_ROUTES.get(language, "piper")
+        if language not in TTS_ROUTES:
+            raise ValueError(f"No TTS route configured for {language!r}.")
+        return TTS_ROUTES[language]
 
     def _backend(self, engine: str):
         if engine == "sbv2":
@@ -49,6 +51,8 @@ class TTS:
                 from tts.sbv2_backend import SBV2Backend
                 self._sbv2 = SBV2Backend()
             return self._sbv2
+        if engine != "piper":
+            raise ValueError(f"Unknown TTS engine: {engine!r}")
         if self._piper is None:
             from tts.piper_backend import PiperBackend
             self._piper = PiperBackend()
@@ -66,7 +70,10 @@ class TTS:
             elif engine == "piper":
                 backend._load_voice(TARGET_LANGUAGE)
         except Exception as exc:
-            log.error("Could not preload %s for %s: %s", engine, TARGET_LANGUAGE, exc)
+            raise RuntimeError(
+                f"Could not load {engine} for {TARGET_LANGUAGE}: {exc}. "
+                "Run python main.py --doctor for setup instructions."
+            ) from exc
 
     def start(self) -> None:
         if self._running:

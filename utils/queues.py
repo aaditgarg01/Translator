@@ -11,7 +11,7 @@ memory grow without limit.  Nothing waits for anything else — each thread just
 """
 
 from dataclasses import dataclass, field
-from queue import Queue
+from queue import Queue, Empty, Full
 
 from config import (
     AUDIO_QUEUE_MAX,
@@ -39,12 +39,12 @@ def put_drop_oldest(q: "Queue", item) -> None:
     """
     try:
         q.put_nowait(item)
-    except Exception:
+    except Full:
         try:
             q.get_nowait()
-        except Exception:
+        except Empty:
             pass
         try:
             q.put_nowait(item)
-        except Exception:
+        except Full:
             pass

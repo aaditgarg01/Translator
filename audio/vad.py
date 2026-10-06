@@ -11,7 +11,6 @@ you when a complete utterance has ended, handing back the buffered float32
 audio ready for Whisper.
 """
 
-import time
 import numpy as np
 
 from config import (
@@ -75,18 +74,7 @@ class SpeechSegmenter:
             log.info("Silero VAD loaded.")
             return model
         except Exception as exc:
-            log.warning("Could not load silero-vad package (%s); trying torch.hub.", exc)
-        try:
-            import torch
-            model, _ = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                trust_repo=True,
-            )
-            log.info("Silero VAD loaded via torch.hub.")
-            return model
-        except Exception as exc:
-            log.warning("torch.hub Silero load failed: %s", exc)
+            log.warning("Could not load silero-vad (%s); using energy VAD.", exc)
             return None
 
     # ── per-frame probability ────────────────────────────────────────
@@ -113,11 +101,6 @@ class SpeechSegmenter:
         prob = self._speech_prob(frame)
         is_voice = prob >= VAD_THRESHOLD
 
-        # keep a short rolling buffer so we don't clip the word onset
-        self._pad.append(frame)
-        if len(self._pad) > self._pad_frames:
-            self._pad.pop(0)
-
         if is_voice:
             if not self._speaking:
                 self._speaking = True
@@ -133,12 +116,16 @@ class SpeechSegmenter:
                 self._buf.append(frame)            # keep trailing silence
                 self._silence_ms += self.frame_ms
 
+        self._pad.append(frame)
+        if len(self._pad) > self._pad_frames:
+            self._pad.pop(0)
+
         if not self._speaking:
             return None
 
         ended = (
             self._silence_ms >= VAD_MIN_SILENCE_MS
-            or self._speech_ms >= VAD_MAX_SPEECH_S * 1000.0
+            or len(self._buf) * self.frame_ms >= VAD_MAX_SPEECH_S * 1000.0
         )
         if not ended:
             return None

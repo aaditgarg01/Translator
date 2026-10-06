@@ -37,8 +37,18 @@ class FaceRegistry:
         self.data_dir = data_dir
         os.makedirs(self.data_dir, exist_ok=True)
 
-        cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        # First try local xml file, then fallback to cv2.data (fixes Mac pip installation issues)
+        local_cascade = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "haarcascade_frontalface_default.xml")
+        if os.path.exists(local_cascade):
+            cascade_path = local_cascade
+        else:
+            cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
         self.face_cascade = cv2.CascadeClassifier(cascade_path)
+        if self.face_cascade.empty():
+            raise RuntimeError(
+                f"Face detector could not load {cascade_path}. "
+                "Reinstall opencv-contrib-python in your active environment."
+            )
         self.recognizer = self._new_recognizer()
 
         self.persons: dict[str, dict] = {}     # {id: {"name","language"}}
@@ -48,6 +58,11 @@ class FaceRegistry:
 
     @staticmethod
     def _new_recognizer():
+        if not hasattr(cv2, "face"):
+            raise RuntimeError(
+                "Face recognition requires opencv-contrib-python. Uninstall "
+                "opencv-python/opencv-python-headless and reinstall opencv-contrib-python."
+            )
         return cv2.face.LBPHFaceRecognizer_create(
             radius=1, neighbors=8, grid_x=8, grid_y=8,
             threshold=float(FACE_RECOGNITION_THRESHOLD),

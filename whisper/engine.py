@@ -51,8 +51,6 @@ class WhisperEngine:
     def load(self) -> None:
         if self.model is not None:
             return
-        from faster_whisper import WhisperModel
-
         # Import torch FIRST: on Windows this loads PyTorch's bundled CUDA
         # libraries (cublas64_12.dll, cuDNN) and registers their DLL directory,
         # which is how CTranslate2 finds cuBLAS for GPU inference.
@@ -60,8 +58,10 @@ class WhisperEngine:
         try:
             import torch
             cuda_ok = torch.cuda.is_available()
-        except ImportError:
+        except (ImportError, OSError):
             pass
+
+        from faster_whisper import WhisperModel
 
         device = WHISPER_DEVICE
         compute = WHISPER_COMPUTE_TYPE

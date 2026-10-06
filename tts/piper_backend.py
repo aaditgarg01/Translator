@@ -26,15 +26,15 @@ class PiperBackend:
 
     def available_for(self, language: str) -> bool:
         path = PIPER_VOICES.get(language)
-        return bool(path and os.path.exists(path))
+        return bool(path and os.path.isfile(path) and os.path.isfile(path + ".json"))
 
     def _load_voice(self, language: str):
         if language in self._voices:
             return self._voices[language]
         path = PIPER_VOICES.get(language)
-        if not path or not os.path.exists(path):
+        if not self.available_for(language):
             raise FileNotFoundError(
-                f"Piper voice for '{language}' not found at {path}. "
+                f"Piper voice for '{language}' requires both {path} and its .json file. "
                 f"Run: python scripts/download_piper_voice.py <voice-name>"
             )
         from piper import PiperVoice

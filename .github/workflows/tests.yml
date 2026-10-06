@@ -1,0 +1,28 @@
+name: macOS and Windows
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  core:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+        python: ['3.11', '3.12', '3.13']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - name: Import the installed speech libraries
+        run: python -c "import cv2, sounddevice, torch, transformers, faster_whisper, piper, silero_vad; from transformers import AutoTokenizer, AutoModelForSeq2SeqLM; assert hasattr(cv2, 'face')"
+      - run: python -m unittest discover -s tests -v
+      - run: python main.py --help
