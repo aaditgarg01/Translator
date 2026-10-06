@@ -110,7 +110,7 @@ class Translator:
 
         if self.state is not None:
             self.state.set_caption(original=text, translated=translated,
-                                   speaker=self.state.current_speaker)
+                                   speaker=item.get("speaker", ""), track_id=item.get("track_id"))
 
         put_drop_oldest(self.translation_queue, {
             "text": translated,

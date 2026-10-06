@@ -49,7 +49,33 @@ selection and watch for "Speaker buffer underrun" warnings. Playback uses
 larger blocks and a robust output latency setting. This is distinct from
 pronunciation quality, which depends on the model and native-language text.
 
-For the OpenCV project direction, see [the proposed roadmap](docs/OPENCV_ROADMAP.md).
+## OpenCV feature 1: visual active-speaker detection
+
+```bash
+python scripts/download_vision_models.py speaker
+python main.py --source English --target Japanese
+```
+
+The camera now uses 68 mouth/face landmarks and Lucas–Kanade optical flow,
+subtracts head motion, and combines mouth motion with microphone VAD. A smaller
+speaking face can win over a larger silent face. Two moving mouths, a missing
+face or weak evidence produce **Speaker uncertain / off camera**. This is a
+heuristic, not lip reading: chewing, occlusion and extreme angles can confuse it.
+Speaker identity is saved with each utterance, so translation delays cannot
+assign it to somebody who spoke later. Preview capture runs independently from
+vision analysis with one pending frame, targeting 30 FPS without building a backlog.
+
+Use `--no-visual-speaker` to disable attribution. A missing landmark model leaves
+speakers unassigned and prints setup instructions; speech translation still works.
+Tune `SPEAKER_MOTION_THRESHOLD` with your webcam and lighting. Local synthetic
+motion tests and a real-model smoke test are included in the verification; live
+multi-person accuracy and actual preview FPS require a camera test.
+
+Model: [LBF / GSOC2017 implementation](https://github.com/kurnianggoro/GSOC2017),
+pinned and checksum-verified by the downloader. Review upstream model/data terms
+before redistribution. Models stay local under `models/vision`.
+
+See [the OpenCV roadmap](docs/OPENCV_ROADMAP.md) for the next features.
 
 ## Quick start: macOS
 

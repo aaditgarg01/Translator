@@ -42,6 +42,11 @@ CAMERA_HEIGHT       = 720
 VIDEO_TARGET_FPS    = 30
 SHOW_WINDOW         = True       # cv2 display window (main thread)
 WINDOW_NAME         = "ESA project Live Translator"
+VISION_WIDTH        = 640        # bounded analysis resolution; preview stays full size
+VISION_MAX_FPS      = 15         # independent worker; newest frame wins
+ENABLE_VISUAL_SPEAKER = True
+LANDMARK_MODEL      = os.path.join(MODELS_DIR, "vision", "lbfmodel.yaml")
+SPEAKER_MOTION_THRESHOLD = 0.035  # normalized mouth velocity; tune on your camera
 
 # ── Face Detection / Recognition (OpenCV) ────────────────────────────
 FACE_DETECTION_SCALE_FACTOR  = 1.3

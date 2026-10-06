@@ -3,8 +3,7 @@ Face detection, recognition and speaker tracking (pure OpenCV).
 
 * Detection  : Haar cascade (frontal face)
 * Recognition: LBPH recogniser (opencv-contrib)
-* Tracking   : while the mic reports speech, the largest recognised face is
-               tagged as the active speaker → overlay "Aadit is Speaking".
+* Speaker attribution: video.speaker uses mouth flow, head compensation and VAD.
 
 The registry persists faces to disk so registered people survive restarts.
 Registration itself lives in ``register.py``.
@@ -170,16 +169,6 @@ COLOR_KNOWN    = (234, 126, 102)     # indigo-ish in BGR
 COLOR_SPEAKING = (0, 215, 255)       # gold
 
 
-def pick_speaker(faces: list[dict]) -> str:
-    """The active speaker is the largest recognised face on screen."""
-    known = [f for f in faces if f["name"] != "Unknown"]
-    pool = known or faces
-    if not pool:
-        return "Speaker"
-    biggest = max(pool, key=lambda f: f["bbox"][2] * f["bbox"][3])
-    return biggest["name"] if biggest["name"] != "Unknown" else "Speaker"
-
-
 def annotate(frame: np.ndarray, faces: list[dict], state) -> np.ndarray:
     """Draw boxes, the active-speaker banner, live caption and status."""
     out = frame.copy()
@@ -189,11 +178,11 @@ def annotate(frame: np.ndarray, faces: list[dict], state) -> np.ndarray:
 
     for f in faces:
         x, y, w, h = f["bbox"]
-        is_speaker = speaking and f["name"] == speaker and f["name"] != "Unknown"
-        if f["name"] == "Unknown":
-            color = COLOR_UNKNOWN
-        elif is_speaker:
+        is_speaker = speaking and f.get("active_speaker", False)
+        if is_speaker:
             color = COLOR_SPEAKING
+        elif f["name"] == "Unknown":
+            color = COLOR_UNKNOWN
         else:
             color = COLOR_KNOWN
 
@@ -208,8 +197,8 @@ def annotate(frame: np.ndarray, faces: list[dict], state) -> np.ndarray:
                     (255, 255, 255), 2)
 
     # active-speaker banner: "Aadit is Speaking…"
-    if speaking and speaker:
-        banner = f"{speaker} is Speaking..."
+    if speaking:
+        banner = f"{speaker} is Speaking..." if speaker else "Speaker uncertain / off camera"
         cv2.putText(out, banner, (15, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.9,
                     COLOR_SPEAKING, 2)
 

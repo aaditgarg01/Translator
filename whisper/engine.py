@@ -25,6 +25,7 @@ from config import (
     LANGUAGE_CODES,
 )
 from utils.queues import put_drop_oldest
+from utils.state import AudioSegment
 from utils.logging_utils import get_logger
 
 log = get_logger("Whisper")
@@ -129,6 +130,9 @@ class WhisperEngine:
                 log.error("Transcription error: %s", exc)
 
     def _transcribe(self, audio: np.ndarray) -> None:
+        speaker, track_id = "", None
+        if isinstance(audio, AudioSegment):
+            speaker, track_id, audio = audio.speaker, audio.track_id, audio.audio
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
 
@@ -146,6 +150,8 @@ class WhisperEngine:
             "text": text,
             "language": info.language,
             "confidence": round(info.language_probability * 100, 1),
+            "speaker": speaker,
+            "track_id": track_id,
         }
         log.info("[%s %.0f%%] %s", info.language, result["confidence"], text)
         put_drop_oldest(self.transcript_queue, result)

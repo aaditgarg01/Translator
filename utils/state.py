@@ -14,6 +14,7 @@ A single lock-guarded object is the simplest correct way to share those.
 import threading
 import time
 from dataclasses import dataclass
+from collections import Counter
 
 
 @dataclass
@@ -22,6 +23,14 @@ class Caption:
     translated: str = ""
     speaker: str = ""
     ts: float = 0.0
+    track_id: int | None = None
+
+
+@dataclass
+class AudioSegment:
+    audio: object
+    speaker: str = ""
+    track_id: int | None = None
 
 
 class SharedState:
@@ -31,6 +40,8 @@ class SharedState:
         self._lock = threading.Lock()
         self._speech_active = False
         self._current_speaker = ""
+        self._speaker_votes = Counter()
+        self._speaker_observations = 0
         self._caption = Caption()
         self._fps = 0.0
         self._output_active = False       # TTS audio currently playing?
@@ -39,7 +50,32 @@ class SharedState:
     # ── speech / speaker ─────────────────────────────────────────────
     def set_speech_active(self, active: bool) -> None:
         with self._lock:
+            if active and not self._speech_active:
+                self._speaker_votes.clear()
+                self._speaker_observations = 0
             self._speech_active = active
+            if not active:
+                self._current_speaker = ""
+
+    def observe_speaker(self, name, track_id):
+        with self._lock:
+            self._current_speaker = name if self._speech_active else ""
+            if self._speech_active:
+                self._speaker_observations += 1
+                if track_id is not None:
+                    self._speaker_votes[(name, track_id)] += 1
+
+    def take_utterance_speaker(self):
+        """Freeze attribution before ASR/translation latency; uncertain stays blank."""
+        with self._lock:
+            result = ("", None)
+            if self._speaker_votes:
+                key, count = self._speaker_votes.most_common(1)[0]
+                if count >= 2 and count >= self._speaker_observations * 0.6:
+                    result = key
+            self._speaker_votes.clear()
+            self._speaker_observations = 0
+            return result
 
     @property
     def speech_active(self) -> bool:
@@ -56,9 +92,9 @@ class SharedState:
             return self._current_speaker
 
     # ── caption ──────────────────────────────────────────────────────
-    def set_caption(self, original: str, translated: str, speaker: str = "") -> None:
+    def set_caption(self, original: str, translated: str, speaker: str = "", track_id=None) -> None:
         with self._lock:
-            self._caption = Caption(original, translated, speaker, time.time())
+            self._caption = Caption(original, translated, speaker, time.time(), track_id)
 
     def get_caption(self) -> Caption:
         with self._lock:

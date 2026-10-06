@@ -110,6 +110,8 @@ class App:
         log.info("Bye.")
 
     def _check_health(self):
+        if self.video is not None and self.video.error:
+            raise RuntimeError(f"Video stopped: {self.video.error}")
         for name, comp in self._started:
             if getattr(comp, "error", None):
                 raise RuntimeError(f"{name} stopped: {comp.error}")
@@ -149,6 +151,7 @@ def parse_args(argv=None):
     parser.add_argument("--target", choices=list(config.LANGUAGE_CODES))
     parser.add_argument("--source", choices=["auto", *config.LANGUAGE_CODES])
     parser.add_argument("--no-video", action="store_true", help="Run the speech pipeline without a camera")
+    parser.add_argument("--no-visual-speaker", action="store_true", help="Disable mouth-motion attribution")
     parser.add_argument("--no-tts", action="store_true", help="Translate to captions/logs without speech output")
     parser.add_argument("--stream", choices=["local", "rtp", "both"])
     parser.add_argument("--input-device", type=_device)
@@ -172,6 +175,8 @@ def main(argv=None):
         config.SDP_OUTPUT = os.path.join(config.BASE_DIR, f"stream_{config.TARGET_LANGUAGE}.sdp")
     if args.no_video:
         config.ENABLE_VIDEO = False
+    if args.no_visual_speaker:
+        config.ENABLE_VISUAL_SPEAKER = False
     if args.no_tts:
         config.ENABLE_TTS = config.ENABLE_STREAM = False
     if args.cpu:

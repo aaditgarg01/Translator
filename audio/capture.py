@@ -12,6 +12,7 @@ from config import (
 )
 from audio.vad import SpeechSegmenter
 from utils.queues import put_drop_oldest
+from utils.state import AudioSegment
 from utils.logging_utils import get_logger
 
 log = get_logger("Audio")
@@ -113,4 +114,5 @@ class AudioCapture:
         self.state.set_speech_active(self.segmenter.speaking)
         if segment is not None:
             log.info("Utterance ready (%.1fs)", len(segment) / AUDIO_SAMPLE_RATE)
-            put_drop_oldest(self.audio_queue, segment)
+            speaker, track_id = self.state.take_utterance_speaker()
+            put_drop_oldest(self.audio_queue, AudioSegment(segment, speaker, track_id))

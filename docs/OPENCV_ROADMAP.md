@@ -1,18 +1,18 @@
 # OpenCV roadmap: Vision-Assisted Multilingual Interpreter
 
-These are proposed features, not implemented capabilities. Keep the working
-speech pipeline and give the camera a real decision-making role.
+Implementation status: feature 1 (visual active-speaker detection) is implemented.
+Features 2–4 below are next. See the README for setup and limitations.
 
 ## What the project currently does with OpenCV
 
 - Captures camera frames and displays a live overlay.
 - Detects frontal faces with a Haar cascade.
 - Registers and recognizes people using LBPH.
-- Attributes speech to the largest recognized face while audio VAD is active.
+- Attributes speech using LBF mouth landmarks, compensated optical flow and audio VAD.
 - Renders face boxes, FPS and captions (currently limited to Latin text).
 
-The weak point is speaker attribution: a large face is not necessarily the
-person talking. This gives the project a clear computer-vision problem to solve.
+The previous largest-face heuristic is retained as the experimental baseline
+to compare against visual speaker attribution on labeled clips.
 
 ## 1. Visual active-speaker detection — highest priority
 

@@ -18,6 +18,8 @@ def validate_config():
         raise ValueError("STREAM_MODE must be local, rtp, or both")
     if config.AUDIO_SAMPLE_RATE != 16000 or config.VAD_FRAME_SIZE != 512 or config.AUDIO_CHANNELS != 1:
         raise ValueError("The speech pipeline requires 16000 Hz, 512-sample VAD frames, and mono audio")
+    if config.VISION_WIDTH < 160 or config.VISION_MAX_FPS <= 0 or config.VIDEO_TARGET_FPS <= 0:
+        raise ValueError("Vision resolution and frame rates must be positive (width >= 160)")
     if config.OUTPUT_SAMPLE_RATE <= 0:
         raise ValueError("OUTPUT_SAMPLE_RATE must be positive")
     if config.WHISPER_DEVICE not in {"auto", "cpu", "cuda"}:
@@ -86,6 +88,8 @@ def run_doctor():
     if config.ENABLE_VIDEO and importlib.util.find_spec("cv2"):
         try:
             import cv2
+            if config.ENABLE_VISUAL_SPEAKER and not os.path.isfile(config.LANDMARK_MODEL):
+                print("WARNING: Visual speaker model missing. Run python scripts/download_vision_models.py speaker")
             if not hasattr(cv2, "face"):
                 issues.append("OpenCV lacks face recognition. Remove opencv-python/headless and reinstall opencv-contrib-python.")
             local = os.path.join(config.BASE_DIR, "haarcascade_frontalface_default.xml")
