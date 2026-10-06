@@ -31,9 +31,9 @@ ENABLE_STREAM = True     # audio output (local speaker and/or RTP)
 # ── Language routing ─────────────────────────────────────────────────
 # Source is auto-detected by Whisper.  Everything is translated INTO this:
 # English uses the core Piper installation; Japanese needs requirements-japanese.txt.
-TARGET_LANGUAGE = "English"      # must be a key in LANGUAGE_CODES below
+TARGET_LANGUAGE = "German"      # must be a key in LANGUAGE_CODES below
 # If you want a fixed source instead of auto-detect, set e.g. "Japanese".
-SOURCE_LANGUAGE = "auto"
+SOURCE_LANGUAGE = "French"
 
 # ── Video / Camera ───────────────────────────────────────────────────
 CAMERA_INDEX        = 0
@@ -87,10 +87,16 @@ NLLB_DEVICE = "auto"                    # auto | cpu | cuda | mps
 # Each engine has its own native sample rate, so every output is resampled to
 # OUTPUT_SAMPLE_RATE before reaching the stream — the streamer opens once.
 TTS_ROUTES = {
-    "Japanese": "sbv2",
+    "Japanese": "piper",
     "English":  "piper",
     "Hindi":    "piper",
-    # "Chinese":  "sbv2",
+    "Chinese":  "piper",
+    "Korean":   "piper",
+    "Spanish":  "piper",
+    "French":   "piper",
+    "German":   "piper",
+    "Portuguese":"piper",
+    "Arabic":   "piper",
 }
 OUTPUT_SAMPLE_RATE = 48_000              # common rate fed to speaker / RTP
 
@@ -98,6 +104,14 @@ OUTPUT_SAMPLE_RATE = 48_000              # common rate fed to speaker / RTP
 PIPER_VOICES = {
     "English":   os.path.join(MODELS_DIR, "piper", "en_US-amy-medium.onnx"),
     "Hindi":     os.path.join(MODELS_DIR, "piper", "hi_IN-pratham-medium.onnx"),
+    "Japanese":  os.path.join(MODELS_DIR, "piper", "ja_JP-hi_fi_captain-medium.onnx"),
+    "Chinese":   os.path.join(MODELS_DIR, "piper", "zh_CN-chaowen-medium.onnx"),
+    "Korean":    os.path.join(MODELS_DIR, "piper", "ko_KR-kss-medium.onnx"),
+    "Spanish":   os.path.join(MODELS_DIR, "piper", "es_ES-davefx-medium.onnx"),
+    "French":    os.path.join(MODELS_DIR, "piper", "fr_FR-mls-medium.onnx"),
+    "German":    os.path.join(MODELS_DIR, "piper", "de_DE-mls-medium.onnx"),
+    "Portuguese":os.path.join(MODELS_DIR, "piper", "pt_BR-cadu-medium.onnx"),
+    "Arabic":    os.path.join(MODELS_DIR, "piper", "ar_JO-kareem-medium.onnx"),
 }
 
 # Style-Bert-VITS2 (download with: python scripts/download_sbv2_model.py)
@@ -112,7 +126,7 @@ SBV2_STYLE       = "Neutral"             # speaking style baked into the model
 SBV2_BERT = {
     "Japanese": "ku-nlp/deberta-v2-large-japanese-char-wwm",
     "English":  "microsoft/deberta-v3-large",
-    # "Chinese":  "hfl/chinese-roberta-wwm-ext-large",
+    "Chinese":  "hfl/chinese-roberta-wwm-ext-large",
 }
 
 # ── Audio output / streaming ─────────────────────────────────────────
@@ -145,14 +159,14 @@ LOG_LEVEL = "INFO"                       # DEBUG | INFO | WARNING | ERROR
 LANGUAGE_CODES = {
     "Japanese":  {"whisper": "ja", "nllb": "jpn_Jpan", "flag": "JP"},
     "English":   {"whisper": "en", "nllb": "eng_Latn", "flag": "EN"},
-    # "Chinese":   {"whisper": "zh", "nllb": "zho_Hans", "flag": "CN"},
-    # "Korean":    {"whisper": "ko", "nllb": "kor_Hang", "flag": "KR"},
+    "Chinese":   {"whisper": "zh", "nllb": "zho_Hans", "flag": "CN"},
+    "Korean":    {"whisper": "ko", "nllb": "kor_Hang", "flag": "KR"},
     "Hindi":     {"whisper": "hi", "nllb": "hin_Deva", "flag": "IN"},
-    #"Spanish":   {"whisper": "es", "nllb": "spa_Latn", "flag": "ES"},
-    # "French":    {"whisper": "fr", "nllb": "fra_Latn", "flag": "FR"},
-    # "German":    {"whisper": "de", "nllb": "deu_Latn", "flag": "DE"},
-    # "Portuguese":{"whisper": "pt", "nllb": "por_Latn", "flag": "PT"},
-    # "Arabic":    {"whisper": "ar", "nllb": "arb_Arab", "flag": "AR"},
+    "Spanish":   {"whisper": "es", "nllb": "spa_Latn", "flag": "ES"},
+    "French":    {"whisper": "fr", "nllb": "fra_Latn", "flag": "FR"},
+    "German":    {"whisper": "de", "nllb": "deu_Latn", "flag": "DE"},
+    "Portuguese":{"whisper": "pt", "nllb": "por_Latn", "flag": "PT"},
+    "Arabic":    {"whisper": "ar", "nllb": "arb_Arab", "flag": "AR"},
 }
 
 

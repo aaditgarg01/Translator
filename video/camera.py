@@ -76,6 +76,7 @@ class VideoCapture:
         frame_period = 1.0 / max(1, VIDEO_TARGET_FPS)
         fps_t0, fps_n = time.time(), 0
         while self._running and self._cam is not None:
+            loop_start = time.time()
             ok, frame = self._cam.read()
             if not ok:
                 time.sleep(0.01)
@@ -99,4 +100,7 @@ class VideoCapture:
                 log.debug("FPS: %.1f", fps)
                 fps_t0, fps_n = now, 0
 
-            time.sleep(frame_period)
+            elapsed = time.time() - loop_start
+            remaining = frame_period - elapsed
+            if remaining > 0:
+                time.sleep(remaining)

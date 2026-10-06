@@ -59,8 +59,6 @@ def installation_issues():
                 issues.append(f"Missing Piper voice/config. Run: python scripts/download_piper_voice.py {name}")
         else:
             required.append(("style_bert_vits2", "requirements-japanese.txt"))
-            if sys.version_info >= (3, 13):
-                issues.append("Use Python 3.11 or 3.12 for the supported Japanese TTS setup.")
             base = os.path.join(config.SBV2_ASSETS_DIR, config.SBV2_MODEL_NAME)
             if not all(os.path.isfile(os.path.join(base, f)) for f in (
                 config.SBV2_MODEL_FILE, config.SBV2_CONFIG_FILE, config.SBV2_STYLE_FILE,
