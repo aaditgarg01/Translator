@@ -42,7 +42,7 @@ def word_crops(line):
     _, ink = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV | cv2.THRESH_OTSU)
     if np.mean(ink > 0) > .5:
         ink = 255 - ink
-    occupied = (ink > 0).sum(axis=0) >= max(1, line.shape[0] * .08)
+    occupied = (ink > 0).any(axis=0)
     columns = np.flatnonzero(occupied)
     if len(columns) == 0:
         return []
