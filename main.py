@@ -18,6 +18,7 @@ milestone at a time.  Press 'q' or ESC in the window (or Ctrl-C) to quit.
 
 import argparse
 import os
+import queue
 import sys
 import time
 
@@ -35,6 +36,7 @@ class App:
         self.state = SharedState()
         self.components = []          # started, in start order (stopped in reverse)
         self.video = None
+        self.scene_queue = queue.Queue(maxsize=8)
         self._running = False
         self._started = []
 
@@ -61,7 +63,7 @@ class App:
 
         if config.ENABLE_TRANSLATE:
             from translate.translator import Translator
-            self.components.append(("Translate", Translator(pipe.transcript, pipe.translation, state)))
+            self.components.append(("Translate", Translator(pipe.transcript, pipe.translation, state, self.scene_queue)))
 
         if config.ENABLE_WHISPER:
             from whisper.engine import WhisperEngine
@@ -73,7 +75,7 @@ class App:
 
         if config.ENABLE_VIDEO:
             from video.camera import VideoCapture
-            self.video = VideoCapture(state, config.CAMERA_INDEX)
+            self.video = VideoCapture(state, config.CAMERA_INDEX, self.scene_queue if config.ENABLE_TRANSLATE else None)
 
     # ── run ──────────────────────────────────────────────────────────
     def start(self) -> None:
@@ -132,6 +134,8 @@ class App:
             if frame is not None:
                 cv2.imshow(config.WINDOW_NAME, frame)
             key = cv2.waitKey(1) & 0xFF
+            if key == ord("t"):
+                self.video.toggle_scene_text()
             if key in (ord("q"), 27):     # q or ESC
                 break
         cv2.destroyAllWindows()
@@ -151,6 +155,8 @@ def parse_args(argv=None):
     parser.add_argument("--target", choices=list(config.LANGUAGE_CODES))
     parser.add_argument("--source", choices=["auto", *config.LANGUAGE_CODES])
     parser.add_argument("--no-video", action="store_true", help="Run the speech pipeline without a camera")
+    parser.add_argument("--scene-text", action="store_true", help="Translate printed camera text (T toggles)")
+    parser.add_argument("--ocr-source", choices=["English", "French", "German", "Spanish", "Portuguese"])
     parser.add_argument("--no-visual-speaker", action="store_true", help="Disable mouth-motion attribution")
     parser.add_argument("--no-tts", action="store_true", help="Translate to captions/logs without speech output")
     parser.add_argument("--stream", choices=["local", "rtp", "both"])
@@ -175,6 +181,10 @@ def main(argv=None):
         config.SDP_OUTPUT = os.path.join(config.BASE_DIR, f"stream_{config.TARGET_LANGUAGE}.sdp")
     if args.no_video:
         config.ENABLE_VIDEO = False
+    if args.scene_text:
+        config.ENABLE_SCENE_TEXT = True
+    if args.ocr_source:
+        config.OCR_SOURCE_LANGUAGE = args.ocr_source
     if args.no_visual_speaker:
         config.ENABLE_VISUAL_SPEAKER = False
     if args.no_tts:

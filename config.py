@@ -46,6 +46,8 @@ VISION_WIDTH        = 640        # bounded analysis resolution; preview stays fu
 VISION_MAX_FPS      = 15         # independent worker; newest frame wins
 ENABLE_VISUAL_SPEAKER = True
 LANDMARK_MODEL      = os.path.join(MODELS_DIR, "vision", "lbfmodel.yaml")
+ENABLE_SCENE_TEXT   = False     # T toggles OCR in the camera window
+OCR_SOURCE_LANGUAGE = "English" # Latin OCR vocabulary; independent of microphone source
 SPEAKER_MOTION_THRESHOLD = 0.035  # normalized mouth velocity; tune on your camera
 
 # ── Face Detection / Recognition (OpenCV) ────────────────────────────

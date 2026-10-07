@@ -1,7 +1,7 @@
 # OpenCV roadmap: Vision-Assisted Multilingual Interpreter
 
-Implementation status: feature 1 (visual active-speaker detection) is implemented.
-Features 2–4 below are next. See the README for setup and limitations.
+Implementation status: features 1–2 (visual active-speaker detection and camera text translation)
+are implemented. Features 3–4 below are next. See the README for setup and limitations.
 
 ## What the project currently does with OpenCV
 

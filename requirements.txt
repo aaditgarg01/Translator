@@ -12,3 +12,5 @@ piper-tts>=1.8,<2
 huggingface_hub>=0.26,<1
 soxr>=0.3.7,<2
 certifi>=2024.2.2
+
+Pillow>=10,<13

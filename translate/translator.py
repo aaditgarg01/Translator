@@ -13,6 +13,7 @@ the video overlay can render live subtitles.
 
 import threading
 import queue
+import time
 
 from config import NLLB_MODEL_NAME, NLLB_DEVICE, LANGUAGE_CODES, TARGET_LANGUAGE, whisper_to_name
 from utils.queues import put_drop_oldest
@@ -24,10 +25,11 @@ log = get_logger("Translate")
 class Translator:
     """Owns one thread: transcript_queue → NLLB → translation_queue."""
 
-    def __init__(self, transcript_queue, translation_queue, state=None):
+    def __init__(self, transcript_queue, translation_queue, state=None, scene_queue=None):
         self.transcript_queue = transcript_queue
         self.translation_queue = translation_queue
         self.state = state
+        self.scene_queue = scene_queue
         self.tokenizer = None
         self.model = None
         self._device = None
@@ -84,13 +86,32 @@ class Translator:
     def _run(self) -> None:
         while self._running:
             try:
-                item = self.transcript_queue.get(timeout=0.3)
+                item = self.transcript_queue.get(timeout=0.1)
             except queue.Empty:
-                continue
+                if self.scene_queue is None:
+                    continue
+                try:
+                    item = self.scene_queue.get_nowait()
+                except queue.Empty:
+                    continue
             try:
-                self._handle(item)
+                if item.get("kind") == "scene":
+                    self._handle_scene(item)
+                else:
+                    self._handle(item)
             except Exception as exc:
                 log.error("Translation error: %s", exc)
+
+    def _handle_scene(self, item):
+        started = time.monotonic()
+        translated = None
+        try:
+            source = self._resolve_nllb(item['language'])
+            if source is None:
+                raise ValueError('Unsupported OCR source language')
+            translated = item['text'] if source == self.target_nllb else self._translate(item['text'], source, self.target_nllb)
+        finally:
+            item['on_result'](item['text'], translated, (time.monotonic() - started) * 1000)
 
     def _handle(self, item: dict) -> None:
         text = item["text"]

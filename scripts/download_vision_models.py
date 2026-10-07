@@ -11,7 +11,16 @@ import certifi
 
 ROOT = Path(__file__).resolve().parents[1]
 LBF_REV = '7523caa8539ef58c5f4132bf99b13c617fbb58df'
+ZOO_REV = '47534e27c9851bb1128ccc0102f1145e27f23f98'
 ASSETS = {
+    'ocr': [
+        ('text_detection_en_ppocrv3_2023may.onnx',
+         f'https://media.githubusercontent.com/media/opencv/opencv_zoo/{ZOO_REV}/models/text_detection_ppocr/text_detection_en_ppocrv3_2023may.onnx',
+         '03f550c6b406fda8bf54bd8327815f6c7e2edd98cea02348c93d879254366587'),
+        ('text_recognition_CRNN_CH_2021sep.onnx',
+         f'https://media.githubusercontent.com/media/opencv/opencv_zoo/{ZOO_REV}/models/text_recognition_crnn/text_recognition_CRNN_CH_2021sep.onnx',
+         '2dc566fd01ac2118b25c6960508ebd758b64c421a2bfa78dc05401ada6737e0b'),
+    ],
     'speaker': [(
         'lbfmodel.yaml',
         f'https://raw.githubusercontent.com/kurnianggoro/GSOC2017/{LBF_REV}/data/lbfmodel.yaml',

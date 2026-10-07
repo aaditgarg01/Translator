@@ -77,6 +77,31 @@ before redistribution. Models stay local under `models/vision`.
 
 See [the OpenCV roadmap](docs/OPENCV_ROADMAP.md) for the next features.
 
+## OpenCV feature 2: camera text translation
+
+```bash
+python -m pip install -r requirements.txt
+python scripts/download_vision_models.py ocr
+python main.py --scene-text --ocr-source English --target German
+```
+
+Press **T** in the camera window to toggle camera text. OpenCV DNN detects printed
+text, corrects perspective, recognizes words and tracks the translated overlay
+with optical flow. Text must repeat across two scans before translation. Results
+are cached; camera text never speaks aloud or replaces conversation captions.
+The existing translation worker gives queued speech priority, but a camera-text
+translation already in progress must finish before the next speech translation.
+
+The bundled detector is trained on English text. Its CRNN vocabulary covers
+ASCII Latin letters, digits and punctuation, **not** accents, Devanagari, Arabic,
+Japanese, Chinese or Korean input. `--ocr-source` sets the language for plain
+Latin text; English is the tested starting point. Translation output can use any
+configured target. OCR works best on clear horizontal or moderately tilted print;
+handwriting, extreme perspective and blur are outside the tested scope.
+
+The OpenCV Zoo models are Apache-2.0 licensed and pinned with SHA-256 checksums.
+No images leave the device. Models download only through the setup script.
+
 ## Quick start: macOS
 
 Install Python **3.12** (3.11 also works). From this project folder:

@@ -16,12 +16,17 @@ log = get_logger('Video')
 
 
 class VideoCapture:
-    def __init__(self, state, camera_index=config.CAMERA_INDEX):
+    def __init__(self, state, camera_index=config.CAMERA_INDEX, scene_queue=None):
         self.state = state
         self.camera_index = camera_index
         self.registry = FaceRegistry()
         self.tracks = FaceTracks()
         self.speaker = None
+        self.scene = None
+        if scene_queue is not None:
+            from video.scene_text import SceneText
+            self.scene = SceneText(scene_queue, config.MODELS_DIR + '/vision',
+                                   config.LANGUAGE_CODES[config.OCR_SOURCE_LANGUAGE]['whisper'])
         self._cam = None
         self._frame = None
         self._raw = None
@@ -55,6 +60,8 @@ class VideoCapture:
                     log.warning('%s; speaker remains unassigned.', exc)
             else:
                 self.vision_status = 'Visual speaker disabled'
+            if self.scene and config.ENABLE_SCENE_TEXT:
+                self.scene.set_enabled(True)
             self._running = True
             self._stop.clear()
             self._vision_thread = threading.Thread(target=self._analyze, name='vision', daemon=True)
@@ -68,9 +75,17 @@ class VideoCapture:
             self.stop()
             return False
 
+    def toggle_scene_text(self):
+        if self.scene:
+            self.scene.set_enabled(not self.scene.enabled)
+        else:
+            log.warning('Camera text needs ENABLE_TRANSLATE=True')
+
     def stop(self):
         self._running = False
         self._stop.set()
+        if self.scene:
+            self.scene.stop()
         self._ready.set()
         for thread in (self._thread, self._vision_thread):
             if thread is not None:
@@ -140,6 +155,9 @@ class VideoCapture:
                 output = annotate(frame, faces, self.state)
                 cv2.putText(output, self.vision_status, (15, 85), cv2.FONT_HERSHEY_SIMPLEX,
                             0.45, (210, 210, 210), 1)
+                if self.scene:
+                    self.scene.submit(frame, captured)
+                    self.scene.draw(output, frame, captured)
                 with self._lock:
                     self._frame = output
                 count += 1
