@@ -134,6 +134,10 @@ class App:
             if frame is not None:
                 cv2.imshow(config.WINDOW_NAME, frame)
             key = cv2.waitKey(1) & 0xFF
+            if key == ord("d"):
+                self.video.toggle_debug()
+            if key == ord("s"):
+                self.video.save_debug_frame()
             if key == ord("t"):
                 self.video.toggle_scene_text()
             if key in (ord("q"), 27):     # q or ESC
@@ -155,6 +159,7 @@ def parse_args(argv=None):
     parser.add_argument("--target", choices=list(config.LANGUAGE_CODES))
     parser.add_argument("--source", choices=["auto", *config.LANGUAGE_CODES])
     parser.add_argument("--no-video", action="store_true", help="Run the speech pipeline without a camera")
+    parser.add_argument("--vision-debug", action="store_true", help="Show landmarks, motion and processing times (D toggles)")
     parser.add_argument("--scene-text", action="store_true", help="Translate printed camera text (T toggles)")
     parser.add_argument("--ocr-source", choices=["English", "French", "German", "Spanish", "Portuguese"])
     parser.add_argument("--no-visual-speaker", action="store_true", help="Disable mouth-motion attribution")
@@ -181,6 +186,8 @@ def main(argv=None):
         config.SDP_OUTPUT = os.path.join(config.BASE_DIR, f"stream_{config.TARGET_LANGUAGE}.sdp")
     if args.no_video:
         config.ENABLE_VIDEO = False
+    if args.vision_debug:
+        config.SHOW_VISION_DEBUG = True
     if args.scene_text:
         config.ENABLE_SCENE_TEXT = True
     if args.ocr_source:

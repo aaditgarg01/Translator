@@ -123,6 +123,29 @@ The downloader installs the fonts and their SIL Open Font License files locally.
 Pillow, HarfBuzz, Unicode BiDi and FreeType render cached text tiles into the OpenCV image. Set
 `TRANSLATOR_FONT` to an installed font path to override the bundled fonts.
 
+## OpenCV feature 4: vision debug view
+
+```bash
+python scripts/download_vision_models.py all
+python main.py --scene-text --vision-debug --ocr-source English --target Japanese
+```
+
+- **D** toggles mouth landmarks, optical-flow arrows, participant IDs, motion
+  scores, OCR detection scores, actual preview FPS, and recent processing times.
+- **T** toggles camera text translation.
+- **S** saves the current view under `data/vision_debug/` for your presentation.
+  Nothing is saved automatically, and these images are ignored by Git.
+- **Q / Esc** exits.
+
+Motion scores are heuristic measurements, not calibrated speaking probabilities.
+Detection scores belong to text detection, not OCR/transcription accuracy.
+Timings show the last completed operation; FPS is measured, not guaranteed.
+The normal view remains uncluttered when debug is off.
+
+For an offline model check, run `python scripts/test_vision_models.py` after
+installing all vision assets. CI runs unit tests on macOS/Windows with Python
+3.11–3.13 and real-model/rendering checks on Python 3.12 on both platforms.
+
 ## Quick start: macOS
 
 Install Python **3.12** (3.11 also works). From this project folder:

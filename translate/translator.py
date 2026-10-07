@@ -114,6 +114,7 @@ class Translator:
             item['on_result'](item['text'], translated, (time.monotonic() - started) * 1000)
 
     def _handle(self, item: dict) -> None:
+        started = time.monotonic()
         text = item["text"]
         src_whisper = item["language"]
         src_nllb = self._resolve_nllb(src_whisper)
@@ -130,6 +131,7 @@ class Translator:
         log.info("%s → %s", whisper_to_name(src_whisper), translated)
 
         if self.state is not None:
+            self.state.record_latency("Translation", (time.monotonic() - started) * 1000)
             self.state.set_caption(original=text, translated=translated,
                                    speaker=item.get("speaker", ""), track_id=item.get("track_id"))
 

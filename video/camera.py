@@ -2,6 +2,8 @@
 
 import threading
 import time
+from pathlib import Path
+from datetime import datetime
 
 import cv2
 import numpy as np
@@ -40,12 +42,14 @@ class VideoCapture:
         self._thread = self._vision_thread = None
         self.error = None
         self.vision_status = 'Starting vision'
+        self.debug = config.SHOW_VISION_DEBUG
 
     def start(self):
         if self._running:
             return True
         self.error = None
         try:
+            cv2.setNumThreads(config.VISION_OPENCV_THREADS)
             self._cam = open_camera(self.camera_index)
             self._cam.set(cv2.CAP_PROP_FRAME_WIDTH, config.CAMERA_WIDTH)
             self._cam.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_HEIGHT)
@@ -74,6 +78,22 @@ class VideoCapture:
             self.error = str(exc)
             self.stop()
             return False
+
+    def toggle_debug(self):
+        self.debug = not self.debug
+
+    def save_debug_frame(self):
+        frame = self.get_frame()
+        if frame is None:
+            return None
+        folder = Path(config.DATA_DIR) / 'vision_debug'
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (datetime.now().strftime('%Y%m%d_%H%M%S_%f') + '.png')
+        if not cv2.imwrite(str(path), frame):
+            log.error('Could not save %s', path)
+            return None
+        log.info('Saved camera view: %s', path)
+        return path
 
     def toggle_scene_text(self):
         if self.scene:
@@ -159,6 +179,13 @@ class VideoCapture:
                 if self.scene:
                     self.scene.submit(frame, captured)
                     self.scene.draw(output, frame, captured)
+                if self.debug:
+                    from video.debug import draw_debug
+                    draw_debug(output, faces, self.state, self.vision_ms,
+                               max(0, captured - self._result_time) * 1000 if self._result_time else 0,
+                               self.scene)
+                cv2.putText(output, 'T: camera text | D: debug | S: save view | Q: quit',
+                            (15, output.shape[0] - 5), cv2.FONT_HERSHEY_SIMPLEX, .4, (190,190,190), 1)
                 with self._lock:
                     self._frame = output
                 count += 1

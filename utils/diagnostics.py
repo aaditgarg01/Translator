@@ -18,7 +18,7 @@ def validate_config():
         raise ValueError("STREAM_MODE must be local, rtp, or both")
     if config.AUDIO_SAMPLE_RATE != 16000 or config.VAD_FRAME_SIZE != 512 or config.AUDIO_CHANNELS != 1:
         raise ValueError("The speech pipeline requires 16000 Hz, 512-sample VAD frames, and mono audio")
-    if config.VISION_WIDTH < 160 or config.VISION_MAX_FPS <= 0 or config.VIDEO_TARGET_FPS <= 0:
+    if config.VISION_WIDTH < 160 or config.VISION_MAX_FPS <= 0 or config.VIDEO_TARGET_FPS <= 0 or config.VISION_OPENCV_THREADS < 1:
         raise ValueError("Vision resolution and frame rates must be positive (width >= 160)")
     if config.OUTPUT_SAMPLE_RATE <= 0:
         raise ValueError("OUTPUT_SAMPLE_RATE must be positive")

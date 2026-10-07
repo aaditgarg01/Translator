@@ -45,6 +45,7 @@ class SharedState:
         self._caption = Caption()
         self._captions = {}
         self._fps = 0.0
+        self._latencies = {}
         self._output_active = False       # TTS audio currently playing?
         self._mute_until = 0.0            # ignore mic until this time (echo tail)
 
@@ -128,6 +129,14 @@ class SharedState:
             return self._output_active or time.time() < self._mute_until
 
     # ── fps (for the overlay) ────────────────────────────────────────
+    def record_latency(self, stage, elapsed_ms):
+        with self._lock:
+            self._latencies[stage] = max(0, elapsed_ms)
+
+    def get_latencies(self):
+        with self._lock:
+            return dict(self._latencies)
+
     def set_fps(self, fps: float) -> None:
         with self._lock:
             self._fps = fps

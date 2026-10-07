@@ -1,7 +1,8 @@
 # OpenCV roadmap: Vision-Assisted Multilingual Interpreter
 
-Implementation status: features 1–3 are implemented, including participant tracks and
-Unicode captions. Feature 4 (the vision debug view) is next. See the README for setup and limitations.
+Implementation status: all four requested features are implemented: visual speaker detection,
+camera text translation, participant captions, and the debug view. Gesture
+controls and a YuNet/SFace upgrade remain optional future work. See the README for setup and limitations.
 
 ## What the project currently does with OpenCV
 
@@ -9,10 +10,10 @@ Unicode captions. Feature 4 (the vision debug view) is next. See the README for 
 - Detects frontal faces with a Haar cascade.
 - Registers and recognizes people using LBPH.
 - Attributes speech using LBF mouth landmarks, compensated optical flow and audio VAD.
-- Renders face boxes, FPS and captions (currently limited to Latin text).
+- Renders face boxes, measured FPS and Unicode captions anchored to participants.
 
-The previous largest-face heuristic is retained as the experimental baseline
-to compare against visual speaker attribution on labeled clips.
+The previous largest-face heuristic can be recovered from earlier Git revisions
+as an experimental baseline for labeled-clip comparisons.
 
 ## 1. Visual active-speaker detection — highest priority
 

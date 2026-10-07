@@ -14,3 +14,6 @@ venv*/
 *.sdp
 # New face registrations are local data (already tracked samples are unchanged).
 data/faces/
+
+# Camera views are saved only when S is pressed and stay local.
+data/vision_debug/

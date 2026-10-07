@@ -13,6 +13,7 @@ runs comfortably alongside the CPU stages (VAD, translation, TTS).
 
 import threading
 import queue
+import time
 
 import numpy as np
 
@@ -136,6 +137,7 @@ class WhisperEngine:
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
 
+        started = time.monotonic()
         segments, info = self.model.transcribe(
             audio,
             beam_size=WHISPER_BEAM_SIZE,
@@ -143,6 +145,8 @@ class WhisperEngine:
             vad_filter=False,           # we already segmented with Silero
         )
         text = " ".join(s.text.strip() for s in segments).strip()
+        if self.state is not None:
+            self.state.record_latency("ASR", (time.monotonic() - started) * 1000)
         if len(text) < 2:
             return
 

@@ -17,6 +17,7 @@ Models are loaded once and reused (never relaunched per sentence).
 
 import threading
 import queue
+import time
 
 from config import TTS_ROUTES, TARGET_LANGUAGE, OUTPUT_SAMPLE_RATE
 from tts.resample import resample_pcm
@@ -108,9 +109,13 @@ class TTS:
                 log.error("Synthesis error (%s): %s", language, exc)
 
     def _synthesize(self, text: str, language: str) -> bytes:
+        started = time.monotonic()
         engine = self._engine_for(language)
         backend = self._backend(engine)
         pcm, src_rate = backend.synth(text, language)
         if not pcm:
             return b""
-        return resample_pcm(pcm, src_rate, OUTPUT_SAMPLE_RATE)
+        result = resample_pcm(pcm, src_rate, OUTPUT_SAMPLE_RATE)
+        if self.state is not None:
+            self.state.record_latency("TTS", (time.monotonic() - started) * 1000)
+        return result
