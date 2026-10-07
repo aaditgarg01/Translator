@@ -102,6 +102,27 @@ handwriting, extreme perspective and blur are outside the tested scope.
 The OpenCV Zoo models are Apache-2.0 licensed and pinned with SHA-256 checksums.
 No images leave the device. Models download only through the setup script.
 
+## OpenCV feature 3: participant tracks and anchored Unicode captions
+
+```bash
+python scripts/download_vision_models.py fonts
+```
+
+Participants keep a spatial track ID while visible. Optical flow bridges brief
+missed detections; registered names need repeated recognition before appearing.
+Ambiguous overlaps reset identity instead of forcing a match. This is short-term
+tracking, not reliable re-identification after a person leaves the camera.
+
+Each person's recent translation appears beside their own tracked face and
+expires after eight seconds. If that track has disappeared, the caption moves
+to the bottom with its original speaker label; it is never attached to another
+person. Unregistered faces display `Person 1`, `Person 2`, etc.
+
+Noto fonts support Latin, Hindi, Arabic, Japanese, Chinese and Korean output.
+The downloader installs the fonts and their SIL Open Font License files locally.
+Pillow, HarfBuzz, Unicode BiDi and FreeType render cached text tiles into the OpenCV image. Set
+`TRANSLATOR_FONT` to an installed font path to override the bundled fonts.
+
 ## Quick start: macOS
 
 Install Python **3.12** (3.11 also works). From this project folder:

@@ -25,9 +25,47 @@ class FaceTracks:
         self.max_age = max_age
         self.tracks = {}
         self.next_id = 1
+        self.gray = None
 
-    def update(self, faces, now):
+    def _predict(self, gray):
+        if self.gray is None or gray is None or self.gray.shape != gray.shape:
+            return set()
+        tracked = set()
+        for tid, old in self.tracks.items():
+            x, y, w, h = map(int, old['face']['bbox'])
+            mask = np.zeros_like(self.gray)
+            cv2.rectangle(mask, (max(0, x), max(0, y)), (x + w, y + h), 255, -1)
+            points = cv2.goodFeaturesToTrack(self.gray, 35, .02, 5, mask=mask)
+            if points is None or len(points) < 6:
+                continue
+            moved, status, _ = cv2.calcOpticalFlowPyrLK(self.gray, gray, points, None)
+            if moved is None:
+                continue
+            back, back_status, _ = cv2.calcOpticalFlowPyrLK(gray, self.gray, moved, None)
+            if back is None:
+                continue
+            valid = (status.ravel() != 0) & (back_status.ravel() != 0)
+            valid &= np.linalg.norm(back[:, 0] - points[:, 0], axis=1) < 1.5
+            if valid.sum() < 6:
+                continue
+            matrix, inliers = cv2.estimateAffinePartial2D(points[valid], moved[valid], method=cv2.RANSAC)
+            if matrix is None or inliers.sum() < 6 or not .8 < np.linalg.norm(matrix[:, 0]) < 1.25:
+                continue
+            corners = cv2.transform(np.float32([[[x,y],[x+w,y+h]]]), matrix)[0]
+            left, top = corners.min(axis=0)
+            right, bottom = corners.max(axis=0)
+            left, top = max(0, left), max(0, top)
+            right, bottom = min(gray.shape[1] - 1, right), min(gray.shape[0] - 1, bottom)
+            if right - left < 25 or bottom - top < 25:
+                continue
+            old['face']['bbox'] = (float(left), float(top), float(right-left), float(bottom-top))
+            tracked.add(tid)
+        return tracked
+
+    def update(self, faces, now, gray=None):
         self.tracks = {k: v for k, v in self.tracks.items() if now - v['seen'] <= self.max_age}
+        predicted = self._predict(gray)
+        self.gray = gray
         pairs = []
         for i, face in enumerate(faces):
             for tid, old in self.tracks.items():
@@ -36,6 +74,12 @@ class FaceTracks:
                 overlap = iou(face['bbox'], old['face']['bbox'])
                 if overlap > 0.25:
                     pairs.append((overlap, i, tid))
+        ambiguous = set()
+        for i in range(len(faces)):
+            scores = sorted([score for score, index, _ in pairs if index == i], reverse=True)
+            if len(scores) > 1 and scores[0] - scores[1] < .1:
+                ambiguous.add(i)
+        pairs = [pair for pair in pairs if pair[1] not in ambiguous]
         assigned, used = {}, set()
         for _, i, tid in sorted(pairs, reverse=True):
             if i not in assigned and tid not in used:
@@ -47,8 +91,23 @@ class FaceTracks:
             if tid is None:
                 tid, self.next_id = self.next_id, self.next_id + 1
             face = dict(face, track_id=tid)
-            self.tracks[tid] = {'face': face, 'seen': now}
+            old = self.tracks.get(tid)
+            votes = old['votes'] if old else deque(maxlen=5)
+            votes.append((face['id'], face['name'], face['language']))
+            identities = [v for v in votes if v[0] >= 0]
+            if identities:
+                choice = max(set(identities), key=identities.count)
+                if identities.count(choice) >= 3:
+                    face.update(id=choice[0], name=choice[1], language=choice[2])
+                else:
+                    face.update(id=-1, name='Unknown', language=None)
+            face['tracked_only'] = False
+            self.tracks[tid] = {'face': dict(face), 'seen': now, 'votes': votes}
             result.append(face)
+        for tid in predicted - used - {f['track_id'] for f in result}:
+            old = self.tracks[tid]
+            if now - old['seen'] < .35 and not any(iou(old['face']['bbox'], f['bbox']) > .2 for f in result):
+                result.append(dict(old['face'], tracked_only=True, motion=0.0, active_speaker=False))
         return result
 
 
@@ -88,7 +147,7 @@ class SpeakerDecision:
             face['active_speaker'] = False
         ranked = sorted(faces, key=lambda f: f['speaker_score'], reverse=True)
         winner = None
-        if speech_active and ranked and ranked[0]['speaker_score'] >= self.threshold:
+        if speech_active and ranked and not ranked[0].get('tracked_only') and ranked[0]['speaker_score'] >= self.threshold:
             first = ranked[0]['speaker_score']
             second = ranked[1]['speaker_score'] if len(ranked) > 1 else 0.0
             if first >= second * 1.6 and first - second >= self.threshold * 0.5:

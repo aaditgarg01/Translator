@@ -43,6 +43,7 @@ class SharedState:
         self._speaker_votes = Counter()
         self._speaker_observations = 0
         self._caption = Caption()
+        self._captions = {}
         self._fps = 0.0
         self._output_active = False       # TTS audio currently playing?
         self._mute_until = 0.0            # ignore mic until this time (echo tail)
@@ -95,6 +96,15 @@ class SharedState:
     def set_caption(self, original: str, translated: str, speaker: str = "", track_id=None) -> None:
         with self._lock:
             self._caption = Caption(original, translated, speaker, time.time(), track_id)
+            self._captions[track_id] = self._caption
+            while len(self._captions) > 10:
+                oldest = min(self._captions, key=lambda key: self._captions[key].ts)
+                del self._captions[oldest]
+
+    def get_captions(self, max_age=8):
+        with self._lock:
+            now = time.time()
+            return [c for c in self._captions.values() if now - c.ts <= max_age]
 
     def get_caption(self) -> Caption:
         with self._lock:

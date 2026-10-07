@@ -111,8 +111,9 @@ class VideoCapture:
                 started = time.monotonic()
                 scale = min(1.0, config.VISION_WIDTH / frame.shape[1])
                 small = cv2.resize(frame, None, fx=scale, fy=scale) if scale < 1 else frame
-                faces = self.tracks.update(self.registry.identify(small), captured)
                 gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+                minimum = tuple(max(30, round(value * scale)) for value in config.FACE_DETECTION_MIN_SIZE)
+                faces = self.tracks.update(self.registry.identify(small, min_size=minimum), captured, gray)
                 name, tid = '', None
                 if self.speaker is not None:
                     name, tid = self.speaker.update(gray, faces, self.state.speech_active, captured)

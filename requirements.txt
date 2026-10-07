@@ -14,3 +14,6 @@ soxr>=0.3.7,<2
 certifi>=2024.2.2
 
 Pillow>=10,<13
+uharfbuzz>=0.40,<1
+freetype-py>=2.4,<3
+python-bidi>=0.6,<1

@@ -25,6 +25,7 @@ from config import (
     FACE_SAMPLE_SIZE,
 )
 from utils.logging_utils import get_logger
+from video.text import draw_label
 
 log = get_logger("Faces")
 
@@ -68,18 +69,18 @@ class FaceRegistry:
         )
 
     # ── detection / recognition ──────────────────────────────────────
-    def detect(self, frame: np.ndarray):
+    def detect(self, frame: np.ndarray, min_size=None):
         gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
         rects = self.face_cascade.detectMultiScale(
             gray,
             scaleFactor=FACE_DETECTION_SCALE_FACTOR,
             minNeighbors=FACE_DETECTION_MIN_NEIGHBORS,
-            minSize=FACE_DETECTION_MIN_SIZE,
+            minSize=min_size or FACE_DETECTION_MIN_SIZE,
         )
         return gray, rects
 
-    def identify(self, frame: np.ndarray) -> list[dict]:
-        gray, rects = self.detect(frame)
+    def identify(self, frame: np.ndarray, min_size=None) -> list[dict]:
+        gray, rects = self.detect(frame, min_size)
         results = []
         for (x, y, w, h) in rects:
             roi = cv2.resize(gray[y:y + h, x:x + w], FACE_SAMPLE_SIZE)
@@ -188,7 +189,8 @@ def annotate(frame: np.ndarray, faces: list[dict], state) -> np.ndarray:
 
         cv2.rectangle(out, (x, y), (x + w, y + h), color, 3 if is_speaker else 2)
 
-        label = f["name"] if not f["language"] else f"{f['name']} ({f['language']})"
+        display_name = f["name"] if f["name"] != "Unknown" else f"Person {f.get('track_id', '?')}"
+        label = display_name if not f["language"] else f"{display_name} ({f['language']})"
         tw = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.55, 2)[0]
         ly = y - 10 if y - 25 > 0 else y + h + tw[1] + 12
         ry1, ry2 = (ly - tw[1] - 6, ly + 6)
@@ -210,32 +212,36 @@ def annotate(frame: np.ndarray, faces: list[dict], state) -> np.ndarray:
         cv2.putText(out, f"FPS: {state.fps:4.1f}", (w_img - 130, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 2)
 
-    # live caption (bottom)
+    # Captions follow the track recorded with the utterance, not today's speaker.
     if state:
-        cap = state.get_caption()
-        if cap.translated:
-            _draw_caption(out, cap.original, cap.translated, w_img, h_img)
+        draw_captions(out, faces, state.get_captions())
     return out
 
 
-def _draw_caption(out, original: str, translated: str, w_img: int, h_img: int):
-    band_h = 70
-    overlay = out.copy()
-    cv2.rectangle(overlay, (0, h_img - band_h), (w_img, h_img), (0, 0, 0), -1)
-    cv2.addWeighted(overlay, 0.55, out, 0.45, 0, out)
-    # OpenCV's built-in font is Latin-only; non-Latin scripts (JA/HI/…) would
-    # render as '?'.  Show what we can and flag the rest as spoken audio.
-    cv2.putText(out, _ascii_or_note(original, 70), (15, h_img - 42),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (180, 180, 180), 1)
-    cv2.putText(out, _ascii_or_note(translated, 60), (15, h_img - 14),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+def caption_anchor(caption, faces):
+    return next((f for f in faces if caption.track_id is not None and f.get('track_id') == caption.track_id), None)
 
 
-def _ascii_or_note(text: str, n: int) -> str:
-    if text and not text.isascii():
-        return "[non-Latin script — see TTS audio]"
-    return _clip(text, n)
-
-
-def _clip(text: str, n: int) -> str:
-    return text if len(text) <= n else text[: n - 1] + "..."
+def draw_captions(out, faces, captions):
+    placed = []
+    unassigned = []
+    for caption in captions:
+        face = caption_anchor(caption, faces)
+        if face is None:
+            unassigned.append(caption)
+            continue
+        x, y, w, h = map(int, face['bbox'])
+        text = f'{caption.speaker}: {caption.translated}' if caption.speaker else caption.translated
+        # Try below the face, then above it, keeping nearby bubbles separated.
+        anchor_y = y + h + 24
+        if anchor_y + 100 > out.shape[0]:
+            anchor_y = max(115, y - 110)
+        for px, py, pw, ph in placed:
+            if abs(x - px) < 280 and abs(anchor_y - py) < ph:
+                anchor_y = py - 100 if py >= 215 else py + ph + 4
+        placed.append(draw_label(out, text, x, anchor_y, max_width=280, size=18, color=(240, 240, 255)))
+    if unassigned:
+        latest = max(unassigned, key=lambda cap: cap.ts)
+        name = latest.speaker or 'Speaker unassigned'
+        draw_label(out, f'{name}: {latest.translated}', 15, out.shape[0] - 90,
+                   max_width=out.shape[1] - 30, size=20)

@@ -46,7 +46,8 @@ def installation_issues():
     if config.ENABLE_AUDIO or (config.ENABLE_STREAM and config.ENABLE_TTS and config.STREAM_MODE != "rtp"):
         required.append(("sounddevice", "sounddevice"))
     if config.ENABLE_VIDEO:
-        required.append(("cv2", "opencv-contrib-python"))
+        required.extend([("cv2", "opencv-contrib-python"), ("PIL", "Pillow"),
+                             ("uharfbuzz", "uharfbuzz"), ("freetype", "freetype-py"), ("bidi", "python-bidi")])
     if config.ENABLE_WHISPER:
         required.append(("faster_whisper", "faster-whisper"))
     if config.ENABLE_TRANSLATE:
@@ -88,6 +89,8 @@ def run_doctor():
     if config.ENABLE_VIDEO and importlib.util.find_spec("cv2"):
         try:
             import cv2
+            if not os.path.isfile(os.path.join(config.MODELS_DIR, "vision", "NotoSansCJKjp-Regular.otf")):
+                print("WARNING: Install Unicode fonts: python scripts/download_vision_models.py fonts")
             if config.ENABLE_VISUAL_SPEAKER and not os.path.isfile(config.LANDMARK_MODEL):
                 print("WARNING: Visual speaker model missing. Run python scripts/download_vision_models.py speaker")
             if not hasattr(cv2, "face"):
