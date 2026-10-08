@@ -150,6 +150,12 @@ installing all vision assets. CI runs unit tests on macOS/Windows with Python
 
 Install Python **3.12** (3.11 also works). From this project folder:
 
+Keep the project in a local folder such as `~/Developer/ESA_Translator`, outside
+iCloud Desktop/Documents. iCloud can offload even tiny Python/OpenCV files and
+leave both startup and face registration waiting indefinitely. Create a fresh
+`.venv` in the local copy with the setup command below; never copy an existing
+virtual environment. Preserve `data/faces` and `models` when relocating a project.
+
 ```bash
 python3.12 scripts/setup.py --download-voice
 source .venv/bin/activate
@@ -274,6 +280,20 @@ of discarded. RTP playback latency depends on the receiver; headphones avoid
 feedback from remote speaker audio.
 
 ## Troubleshooting
+
+**Nothing happens for minutes, including during face registration (macOS):**
+the startup check now reports iCloud placeholders before importing native
+libraries. An existing file with a normal-looking size can still be cloud-only.
+Choose **Keep Downloaded** in Finder and wait until all required files finish
+downloading, or relocate to a folder outside iCloud and rebuild `.venv`.
+Re-download missing models with the provided download scripts. Keep the original
+folder until your settings, saved faces and models have been transferred; a fresh
+Git clone only contains files already committed. Do not delete your registrations.
+Registration now logs library loading, saved-face loading, camera opening and
+training separately. New registrations extend the saved LBPH model without
+re-reading old photos or discarding existing identities. If that model is missing,
+the old training photos must be available before capture starts.
+
 
 | Symptom | Action |
 |---|---|

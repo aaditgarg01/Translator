@@ -9,6 +9,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from startup import require_local
 
 
 def iou(a, b):
@@ -166,6 +167,7 @@ class VisualSpeaker:
     def __init__(self, model_path, threshold=0.035):
         if not Path(model_path).is_file():
             raise FileNotFoundError('Missing mouth landmark model. Run python scripts/download_vision_models.py speaker')
+        require_local(model_path)
         self.facemark = cv2.face.createFacemarkLBF()
         self.facemark.loadModel(str(model_path))
         self.previous = {}

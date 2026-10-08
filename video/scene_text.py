@@ -15,6 +15,7 @@ import numpy as np
 
 from utils.queues import put_drop_oldest
 from utils.logging_utils import get_logger
+from startup import require_local
 
 log = get_logger('SceneText')
 
@@ -58,6 +59,8 @@ class SceneOCR:
         recognizer = folder / 'text_recognition_CRNN_CH_2021sep.onnx'
         if not detector.is_file() or not recognizer.is_file():
             raise FileNotFoundError('Run python scripts/download_vision_models.py ocr')
+        require_local(detector)
+        require_local(recognizer)
         self.detector = cv2.dnn_TextDetectionModel_DB(str(detector))
         self.detector.setInputParams(scale=1 / 255, size=(640, 640),
                                      mean=(123.675, 116.28, 103.53))

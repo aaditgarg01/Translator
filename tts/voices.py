@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from config import LANGUAGE_CODES
+from startup import require_local
 
 SAMPLE_TEXTS = {
     'English': 'Hello. How are you today?',
@@ -25,8 +26,10 @@ def voice_issues(path, language):
         name = Path(path).stem if path else '<voice-name>'
         return [f'Missing Piper voice/config. Run: python scripts/download_piper_voice.py {name}']
     try:
+        require_local(path)
+        require_local(path + '.json')
         data = json.loads(Path(path + '.json').read_text(encoding='utf-8'))
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, RuntimeError) as exc:
         return [f'Cannot read voice configuration for {language}: {exc}']
     issues = []
     code = data.get('language', {}).get('code', '')

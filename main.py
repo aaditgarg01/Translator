@@ -22,6 +22,10 @@ import queue
 import sys
 import time
 
+if __name__ == "__main__" and not any(a in sys.argv for a in ("-h", "--help")):
+    from startup import cli_preflight
+    cli_preflight()
+
 import config
 from utils.queues import Pipeline
 from utils.state import SharedState
@@ -49,6 +53,7 @@ class App:
         # Consumers first, producers last, so nothing overflows at startup.
         tts = None
         if config.ENABLE_TTS:
+            log.info("Loading speech synthesis libraries…")
             from tts.engine import TTS
             tts = TTS(pipe.translation, pipe.pcm, state)
 
@@ -62,18 +67,22 @@ class App:
             self.components.append(("TTS", tts))
 
         if config.ENABLE_TRANSLATE:
+            log.info("Loading translation libraries…")
             from translate.translator import Translator
             self.components.append(("Translate", Translator(pipe.transcript, pipe.translation, state, self.scene_queue)))
 
         if config.ENABLE_WHISPER:
+            log.info("Loading speech recognition libraries…")
             from whisper.engine import WhisperEngine
             self.components.append(("Whisper", WhisperEngine(pipe.audio, pipe.transcript, state)))
 
         if config.ENABLE_AUDIO:
+            log.info("Loading microphone libraries…")
             from audio.capture import AudioCapture
             self.components.append(("Audio", AudioCapture(pipe.audio, state)))
 
         if config.ENABLE_VIDEO:
+            log.info("Loading OpenCV and registered faces…")
             from video.camera import VideoCapture
             self.video = VideoCapture(state, config.CAMERA_INDEX, self.scene_queue if config.ENABLE_TRANSLATE else None)
 

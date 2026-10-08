@@ -5,6 +5,7 @@ import os
 import unicodedata
 
 import config
+from startup import require_local
 
 import cv2
 import numpy as np
@@ -34,6 +35,7 @@ def font(size, script='latin'):
                        '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf']
     for path in candidates:
         if path and Path(path).is_file():
+            require_local(path)
             return ImageFont.truetype(path, size)
     return ImageFont.load_default(size=size) if script == 'latin' else None
 

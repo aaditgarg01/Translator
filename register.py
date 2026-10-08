@@ -11,13 +11,14 @@ view, then trains the recogniser.  Press 'q' to abort.
 """
 
 import argparse
+import sys
 import time
 
-import cv2
+if __name__ == "__main__" and not any(a in sys.argv for a in ("-h", "--help")):
+    from startup import cli_preflight
+    cli_preflight()
 
 import config
-from video.tracking import FaceRegistry
-from video.device import open_camera
 from utils.logging_utils import get_logger
 
 log = get_logger("Register")
@@ -34,10 +35,18 @@ def main() -> None:
 
     if args.count < 1:
         ap.error("--count must be positive")
+    log.info("Loading OpenCV for face registration…")
+    import cv2
+    from video.tracking import FaceRegistry
+    from video.device import open_camera
+
+    log.info("Loading registered faces…")
+    registry = FaceRegistry()
+    registry.check_training_files()
+    log.info("Opening camera %d…", args.camera)
     cam = open_camera(args.camera)
 
     try:
-        registry = FaceRegistry()
         frames, last_grab = [], 0.0
         log.info("Capturing %d face frames for '%s' (%s). Look at the camera…",
                  args.count, args.name, args.language)
@@ -70,6 +79,7 @@ def main() -> None:
         cam.release()
         cv2.destroyAllWindows()
 
+    log.info("Saving captures and training the face recogniser…")
     pid, saved = registry.register_person(args.name, args.language, frames)
     if pid is None:
         log.error("Registration failed — no faces were detected in the captures.")
@@ -78,4 +88,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        log.info("Interrupted.")
+    except Exception as exc:
+        log.error("%s", exc)
+        raise SystemExit(1)

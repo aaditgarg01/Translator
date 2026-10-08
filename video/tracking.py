@@ -25,7 +25,7 @@ from config import (
     FACE_SAMPLE_SIZE,
 )
 from utils.logging_utils import get_logger
-from video.text import draw_label
+from startup import require_local
 
 log = get_logger("Faces")
 
@@ -43,6 +43,7 @@ class FaceRegistry:
             cascade_path = local_cascade
         else:
             cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        require_local(cascade_path)
         self.face_cascade = cv2.CascadeClassifier(cascade_path)
         if self.face_cascade.empty():
             raise RuntimeError(
@@ -98,6 +99,7 @@ class FaceRegistry:
 
     # ── registration ─────────────────────────────────────────────────
     def register_person(self, name: str, language: str, frames: list[np.ndarray]):
+        self.check_training_files()
         person_id = self.next_id
         self.persons[str(person_id)] = {"name": name, "language": language}
         self.next_id += 1
@@ -105,11 +107,14 @@ class FaceRegistry:
         os.makedirs(person_dir, exist_ok=True)
 
         saved = 0
+        samples = []
         for frame in frames:
             gray, rects = self.detect(frame)
             for (x, y, w, h) in rects:
                 roi = cv2.resize(gray[y:y + h, x:x + w], FACE_SAMPLE_SIZE)
-                cv2.imwrite(os.path.join(person_dir, f"face_{saved}.jpg"), roi)
+                if not cv2.imwrite(os.path.join(person_dir, f"face_{saved}.jpg"), roi):
+                    raise OSError("Could not save a face sample; check disk space and folder permissions.")
+                samples.append(roi)
                 saved += 1
 
         if saved == 0:
@@ -118,7 +123,13 @@ class FaceRegistry:
             shutil.rmtree(person_dir, ignore_errors=True)
             return None, 0
 
-        self._retrain()
+        if self.is_trained:
+            # LBPH supports incremental enrolment. Keep all existing histograms,
+            # including people whose original photos are currently cloud-only.
+            self.recognizer.update(samples, np.full(saved, person_id, dtype=np.int32))
+            self.recognizer.save(os.path.join(self.data_dir, "model.yml"))
+        else:
+            self._retrain()
         self._save_metadata()
         return person_id, saved
 
@@ -126,6 +137,16 @@ class FaceRegistry:
         return {int(k): v for k, v in self.persons.items()}
 
     # ── persistence ──────────────────────────────────────────────────
+    def check_training_files(self):
+        # Check before capturing or changing metadata, not halfway through training.
+        if self.is_trained:
+            return  # Existing LBPH histograms are sufficient for incremental enrolment.
+        for pid in self.persons:
+            folder = os.path.join(self.data_dir, pid)
+            require_local(folder, recursive=True)
+            if not os.path.isdir(folder) or not any(fn.endswith('.jpg') for fn in os.listdir(folder)):
+                raise RuntimeError(f"Cannot rebuild face {pid}: restore its training photos in {folder} or the saved model.yml.")
+
     def _retrain(self):
         faces, labels = [], []
         for pid in self.persons:
@@ -152,6 +173,8 @@ class FaceRegistry:
     def _load(self):
         meta = os.path.join(self.data_dir, "metadata.json")
         model = os.path.join(self.data_dir, "model.yml")
+        require_local(meta)
+        require_local(model)
         if os.path.exists(meta):
             with open(meta, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -223,6 +246,8 @@ def caption_anchor(caption, faces):
 
 
 def draw_captions(out, faces, captions):
+    from video.text import draw_label
+
     placed = []
     unassigned = []
     for caption in captions:
