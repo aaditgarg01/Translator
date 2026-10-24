@@ -16,12 +16,14 @@ import queue
 import time
 
 import numpy as np
+import config
 
 from config import (
     WHISPER_MODEL_SIZE,
     WHISPER_DEVICE,
     WHISPER_COMPUTE_TYPE,
     WHISPER_BEAM_SIZE,
+    WHISPER_CPU_THREADS,
     SOURCE_LANGUAGE,
     LANGUAGE_CODES,
 )
@@ -35,13 +37,15 @@ log = get_logger("Whisper")
 class WhisperEngine:
     """Owns one thread: audio_queue → faster-whisper → transcript_queue."""
 
-    def __init__(self, audio_queue, transcript_queue, state=None):
+    def __init__(self, audio_queue, transcript_queue, state=None, meeting=None):
         self.audio_queue = audio_queue
         self.transcript_queue = transcript_queue
         self.state = state
+        self.meeting = meeting
         self.model = None
         self._running = False
         self._thread: threading.Thread | None = None
+        self.error = None
 
         # fixed source language if the user pinned one
         self._forced_lang = None
@@ -89,7 +93,8 @@ class WhisperEngine:
         for dev, comp in candidates:
             try:
                 log.info("Loading Whisper '%s' on %s (%s) …", WHISPER_MODEL_SIZE, dev, comp)
-                model = WhisperModel(WHISPER_MODEL_SIZE, device=dev, compute_type=comp)
+                model = WhisperModel(WHISPER_MODEL_SIZE, device=dev, compute_type=comp,
+                                     cpu_threads=WHISPER_CPU_THREADS)
                 # Warm-up inference: forces CUDA/cuBLAS to actually load now, so a
                 # broken GPU backend (e.g. missing cublas64_12.dll) is rejected
                 # here at startup instead of crashing on the first utterance.
@@ -116,7 +121,11 @@ class WhisperEngine:
     def stop(self) -> None:
         self._running = False
         if self._thread is not None:
-            self._thread.join(timeout=3)
+            self._thread.join(timeout=30 if self.meeting else 3)
+            if self.meeting and self._thread.is_alive():
+                self.meeting.gap('ASR was still processing at shutdown; the final utterance may be missing.')
+        if self.meeting and not self.audio_queue.empty():
+            self.meeting.gap('Unprocessed audio remained in the ASR queue at shutdown.')
 
     # ── thread body ──────────────────────────────────────────────────
     def _run(self) -> None:
@@ -129,10 +138,20 @@ class WhisperEngine:
                 self._transcribe(segment)
             except Exception as exc:
                 log.error("Transcription error: %s", exc)
+                if self.meeting:
+                    try:
+                        self.meeting.gap(f'Transcription failed: {exc}')
+                    except OSError:
+                        self.error = 'Meeting journal could not be written; check disk space and permissions.'
+                        self._running = False
+                    if isinstance(exc, OSError):
+                        self.error = f'Meeting capture failed: {exc}'
+                        self._running = False
 
     def _transcribe(self, audio: np.ndarray) -> None:
-        speaker, track_id = "", None
+        speaker, track_id, captured_at = "", None, time.time()
         if isinstance(audio, AudioSegment):
+            captured_at = audio.captured_at or captured_at
             speaker, track_id, audio = audio.speaker, audio.track_id, audio.audio
         if audio.dtype != np.float32:
             audio = audio.astype(np.float32)
@@ -156,6 +175,13 @@ class WhisperEngine:
             "confidence": round(info.language_probability * 100, 1),
             "speaker": speaker,
             "track_id": track_id,
+            "captured_at": captured_at,
+            "duration_seconds": len(audio) / 16000,
         }
         log.info("[%s %.0f%%] %s", info.language, result["confidence"], text)
+        if self.meeting:
+            # Persist before the live translator's bounded queue can discard it.
+            result['meeting_id'] = self.meeting.record_transcript(result)
+        if self.state is not None and not config.ENABLE_TRANSLATE:
+            self.state.set_caption(text, text, speaker, track_id)
         put_drop_oldest(self.transcript_queue, result)

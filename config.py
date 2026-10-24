@@ -45,6 +45,7 @@ WINDOW_NAME         = "ESA project Live Translator"
 VISION_WIDTH        = 640        # bounded analysis resolution; preview stays full size
 VISION_OPENCV_THREADS = 2       # bound CPU use so speech/preview keep time
 VISION_MAX_FPS      = 15         # independent worker; newest frame wins
+VISION_DETECT_INTERVAL = 3       # full detection every third analysis; flow bridges gaps
 ENABLE_VISUAL_SPEAKER = True
 LANDMARK_MODEL      = os.path.join(MODELS_DIR, "vision", "lbfmodel.yaml")
 SHOW_VISION_DEBUG  = False     # D toggles diagnostic overlays
@@ -82,10 +83,16 @@ WHISPER_MODEL_SIZE   = "small"          # tiny | base | small | medium | large-v
 WHISPER_DEVICE       = "auto"            # auto | cpu | cuda
 WHISPER_COMPUTE_TYPE = "int8"            # auto | int8 | float16 | float32
 WHISPER_BEAM_SIZE    = 5
+WHISPER_CPU_THREADS  = 2         # leave CPU time for VAD, vision and playback
 
 # ── Translation (NLLB-200) ───────────────────────────────────────────
 NLLB_MODEL_NAME = "facebook/nllb-200-distilled-600M"
 NLLB_DEVICE = "auto"                    # auto | cpu | cuda | mps
+NLLB_CPU_INT8 = False                   # eco enables dynamic int8 Linear layers on CPU
+TRANSLATION_CACHE_SIZE = 256            # exact text + source + target; bounded LRU
+
+# Meeting journals contain text and speaker metadata, never raw audio/video.
+MINUTES_DIR = os.path.join(DATA_DIR, "meetings")
 
 # ── Text-to-Speech (multi-engine, routed by language) ────────────────
 # Everything is translated INTO the target language, so the TTS stage only
@@ -108,6 +115,7 @@ TTS_ROUTES = {
     "Arabic":   "piper",
 }
 OUTPUT_SAMPLE_RATE = 48_000              # common rate fed to speaker / RTP
+TTS_CACHE_MAX_BYTES = 4 * 1024 * 1024     # bounded PCM reuse for exact repeated phrases
 
 # Piper voices (download with: python scripts/download_piper_voice.py <name>)
 PIPER_VOICES = {

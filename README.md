@@ -10,6 +10,92 @@ Chinese, Korean, Spanish, French, German, Portuguese and Arabic. Voice models
 and pronunciation assets must be downloaded for each target. Inference runs
 locally after setup; voice quality varies by model, dialect and input text.
 
+## Meeting minutes and lower compute modes
+
+Record a meeting alongside translation (activate `.venv` first):
+
+```bash
+python main.py --source English --target Japanese --stream local --minutes --meeting-title "Project review"
+```
+
+For notes without translated audio, skip NLLB and Piper entirely:
+
+```bash
+python main.py --source English --minutes-only --meeting-title "Project review"
+```
+
+The camera still provides available speaker labels. Add `--no-video` for a
+microphone-only session; those speakers remain unassigned. Each recognised
+utterance is flushed to a local `transcript.jsonl` journal before the live
+translation queue can drop it. Capture timestamps and speaker/track metadata
+travel with the original utterance. This preserves recognised text even when a
+slow translator drops older work; it cannot recover speech dropped before ASR,
+speech muted during playback, or words that ASR did not recognise.
+
+Press **M** in the camera window to export a snapshot, or exit with **Q/Escape**
+(**Ctrl-C** in audio-only mode) to finalise. The terminal prints the unique
+session folder under `data/meetings/`. Use `--minutes-dir PATH` to choose another
+parent folder. Files are `minutes.html` (open in a browser and print/save as PDF),
+`minutes.md`, `minutes.json`, and the journal. No raw microphone audio or video
+is stored by this feature. Default meeting files are ignored by Git.
+
+Minutes contain participants, timestamps, an extractive summary, the original
+transcript, available translations, recording-gap notices, and decision/action
+**candidates for review**. Summary sentences quote recognised text; English cue
+rules identify candidates without inventing owners or deadlines. Non-English
+speech remains in the transcript; English translations can supply those cues
+when English is the target. A dedicated generative summary model is not loaded.
+The recorder waits up to 30 seconds for in-flight ASR on exit and reports queued
+or unfinished work as gaps instead of claiming a complete transcript.
+
+If the application was interrupted before export, rebuild minutes from its
+journal (replace the example folder with the one printed by your session):
+
+```bash
+python scripts/export_minutes.py "data/meetings/SESSION_FOLDER/transcript.jsonl"
+```
+
+An incomplete final journal line is skipped with a recording note. A malformed
+complete line fails visibly. Export snapshots use temporary files and atomic
+replacement so an interrupted write preserves the previous usable file.
+
+For a smaller workload, choose the opt-in eco preset:
+
+```bash
+python main.py --source English --minutes-only --performance eco --meeting-title "Project review"
+python main.py --source English --target Japanese --stream local --minutes --performance eco
+```
+
+Eco selects **base** Whisper with beam size one, optional CPU int8 translation,
+and 480-pixel-wide vision at up to 10 analysis FPS; preview still targets 30 FPS.
+CPU int8 replaces NLLB Linear weights with lower-precision values, reducing their
+memory footprint and floating-point work. CUDA/MPS keep their normal precision.
+An unsupported CPU quantization backend falls back to a clean float32 model.
+Eco can affect recognition and translation quality, especially for accents,
+noise and short phrases. Use `--no-translation-int8` to retain float32 and
+`--whisper-model small` to override the preset's ASR model while keeping its
+lighter vision settings. `--performance balanced` retains the established small
+Whisper model, beam size five, 640-pixel vision and 15 analysis FPS. A newly
+selected model may need a first-use download.
+
+Both modes also avoid repeated work:
+
+- Full face detection/recognition runs every third analysis frame while tracks
+  exist; validated optical flow bridges scheduled skips. Empty scenes still
+  scan for new faces. `VISION_DETECT_INTERVAL=1` restores every-frame scanning.
+- Mouth landmarks/flow run during audio speech or when debug is visible, and
+  reset during silence. Leave debug off to obtain that saving.
+- Translation uses a 256-entry exact text/source/target LRU cache. Repeated
+  speech reuses up to 4 MiB of synthesised PCM with a maximum of 32 entries.
+  These caches never merge or remove repeated turns from meeting transcripts.
+- Tracking extracts feature points from face regions rather than processing a
+  full-frame mask for each participant. Preview displays only new frames.
+- Whisper is limited to two CPU threads to reduce contention with the camera,
+  VAD and playback. `WHISPER_CPU_THREADS` controls that budget.
+
+These changes reduce unnecessary model calls and image work. Actual runtime,
+power use and FPS depend on hardware; no fixed FLOP reduction is claimed.
+
 ## Multilingual voice quality
 
 Install pronunciation extras and the updated French/German voices in the active
@@ -133,6 +219,7 @@ python main.py --scene-text --vision-debug --ocr-source English --target Japanes
 - **D** toggles mouth landmarks, optical-flow arrows, participant IDs, motion
   scores, OCR detection scores, actual preview FPS, and recent processing times.
 - **T** toggles camera text translation.
+- **M** exports the current meeting minutes when started with `--minutes` or `--minutes-only`.
 - **S** saves the current view under `data/vision_debug/` for your presentation.
   Nothing is saved automatically, and these images are ignored by Git.
 - **Q / Esc** exits.

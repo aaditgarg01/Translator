@@ -31,6 +31,7 @@ class AudioSegment:
     audio: object
     speaker: str = ""
     track_id: int | None = None
+    captured_at: float = 0.0  # utterance end time, before ASR queue/inference delays
 
 
 class SharedState:

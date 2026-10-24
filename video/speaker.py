@@ -34,11 +34,15 @@ class FaceTracks:
         tracked = set()
         for tid, old in self.tracks.items():
             x, y, w, h = map(int, old['face']['bbox'])
-            mask = np.zeros_like(self.gray)
-            cv2.rectangle(mask, (max(0, x), max(0, y)), (x + w, y + h), 255, -1)
-            points = cv2.goodFeaturesToTrack(self.gray, 35, .02, 5, mask=mask)
+            x0, y0 = max(0, x), max(0, y)
+            x1, y1 = min(self.gray.shape[1], x+w), min(self.gray.shape[0], y+h)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            roi = self.gray[y0:y1, x0:x1]
+            points = cv2.goodFeaturesToTrack(roi, 35, .02, 5)
             if points is None or len(points) < 6:
                 continue
+            points += np.float32([x0, y0])
             moved, status, _ = cv2.calcOpticalFlowPyrLK(self.gray, gray, points, None)
             if moved is None:
                 continue
@@ -52,7 +56,7 @@ class FaceTracks:
             matrix, inliers = cv2.estimateAffinePartial2D(points[valid], moved[valid], method=cv2.RANSAC)
             if matrix is None or inliers.sum() < 6 or not .8 < np.linalg.norm(matrix[:, 0]) < 1.25:
                 continue
-            corners = cv2.transform(np.float32([[[x,y],[x+w,y+h]]]), matrix)[0]
+            corners = cv2.transform(np.float32([[[x,y],[x+w,y],[x+w,y+h],[x,y+h]]]), matrix)[0]
             left, top = corners.min(axis=0)
             right, bottom = corners.max(axis=0)
             left, top = max(0, left), max(0, top)
@@ -63,7 +67,7 @@ class FaceTracks:
             tracked.add(tid)
         return tracked
 
-    def update(self, faces, now, gray=None):
+    def update(self, faces, now, gray=None, detection_frame=True):
         self.tracks = {k: v for k, v in self.tracks.items() if now - v['seen'] <= self.max_age}
         predicted = self._predict(gray)
         self.gray = gray
@@ -108,7 +112,8 @@ class FaceTracks:
         for tid in predicted - used - {f['track_id'] for f in result}:
             old = self.tracks[tid]
             if now - old['seen'] < .35 and not any(iou(old['face']['bbox'], f['bbox']) > .2 for f in result):
-                result.append(dict(old['face'], tracked_only=True, motion=0.0, active_speaker=False))
+                # A scheduled detector skip differs from an actual failed detection.
+                result.append(dict(old['face'], tracked_only=detection_frame, motion=0.0, active_speaker=False))
         return result
 
 
@@ -172,6 +177,12 @@ class VisualSpeaker:
         self.facemark.loadModel(str(model_path))
         self.previous = {}
         self.decision = SpeakerDecision(threshold)
+
+    def reset(self):
+        self.previous.clear()
+        self.decision.history.clear()
+        self.decision.candidate = None
+        self.decision.since = 0.0
 
     def update(self, gray, faces, speech_active, now):
         old, self.previous = self.previous, {}

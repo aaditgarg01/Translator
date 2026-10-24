@@ -17,3 +17,7 @@ data/faces/
 
 # Camera views are saved only when S is pressed and stay local.
 data/vision_debug/
+
+# Opt-in meeting transcripts and summaries are private session output.
+data/meetings/
+:memory:.ses

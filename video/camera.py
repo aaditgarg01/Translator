@@ -119,6 +119,7 @@ class VideoCapture:
             return self._frame
 
     def _analyze(self):
+        frame_index = 0
         try:
             while self._running:
                 self._ready.wait(0.2)
@@ -133,10 +134,15 @@ class VideoCapture:
                 small = cv2.resize(frame, None, fx=scale, fy=scale) if scale < 1 else frame
                 gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
                 minimum = tuple(max(30, round(value * scale)) for value in config.FACE_DETECTION_MIN_SIZE)
-                faces = self.tracks.update(self.registry.identify(small, min_size=minimum), captured, gray)
+                detection_frame = not self.tracks.tracks or frame_index % config.VISION_DETECT_INTERVAL == 0
+                detections = self.registry.identify(small, min_size=minimum, gray=gray) if detection_frame else []
+                faces = self.tracks.update(detections, captured, gray, detection_frame=detection_frame)
+                frame_index += 1
                 name, tid = '', None
-                if self.speaker is not None:
+                if self.speaker is not None and (self.state.speech_active or self.debug):
                     name, tid = self.speaker.update(gray, faces, self.state.speech_active, captured)
+                elif self.speaker is not None:
+                    self.speaker.reset()
                 # Never attribute speech from an analysis result that has fallen behind.
                 if time.monotonic() - captured <= 0.5:
                     self.state.observe_speaker(name, tid)
@@ -184,7 +190,7 @@ class VideoCapture:
                     draw_debug(output, faces, self.state, self.vision_ms,
                                max(0, captured - self._result_time) * 1000 if self._result_time else 0,
                                self.scene)
-                cv2.putText(output, 'T: camera text | D: debug | S: save view | Q: quit',
+                cv2.putText(output, 'T: camera text | D: debug | M: minutes | S: save view | Q: quit',
                             (15, output.shape[0] - 5), cv2.FONT_HERSHEY_SIMPLEX, .4, (190,190,190), 1)
                 with self._lock:
                     self._frame = output

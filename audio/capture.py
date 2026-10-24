@@ -2,6 +2,7 @@
 
 import queue
 import threading
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -19,9 +20,10 @@ log = get_logger("Audio")
 
 
 class AudioCapture:
-    def __init__(self, audio_queue, state):
+    def __init__(self, audio_queue, state, meeting=None):
         self.audio_queue = audio_queue
         self.state = state
+        self.meeting = meeting
         self.segmenter = SpeechSegmenter(backend=VAD_BACKEND)
         self._frames = queue.Queue(maxsize=20)
         self._discontinuity = threading.Event()
@@ -34,7 +36,7 @@ class AudioCapture:
         # No model inference or logging on the real-time audio thread.
         if status:
             self._discontinuity.set()
-        item = (indata[:, 0].copy(), self.state.mic_muted)
+        item = (indata[:, 0].copy(), self.state.mic_muted, time.time())
         try:
             self._frames.put_nowait(item)
         except queue.Full:
@@ -63,6 +65,8 @@ class AudioCapture:
         log.info("Microphone open @ %d Hz (%s VAD)", AUDIO_SAMPLE_RATE, self.segmenter.backend)
 
     def stop(self):
+        if self._running and self.meeting and self.segmenter.speaking:
+            self.meeting.gap('Recording stopped during speech; the unfinished utterance may be missing.')
         self._running = False
         if self._stream is not None:
             try:
@@ -79,12 +83,14 @@ class AudioCapture:
         try:
             while self._running:
                 try:
-                    frame, captured_muted = self._frames.get(timeout=0.2)
+                    frame, captured_muted, captured_at = self._frames.get(timeout=0.2)
                 except queue.Empty:
                     if not self._stream.active:
                         raise RuntimeError("Microphone stopped or was disconnected.")
                     continue
                 if self._discontinuity.is_set():
+                    if self.meeting:
+                        self.meeting.gap('Microphone frame overflow or discontinuity; some audio was discarded.')
                     self._discontinuity.clear()
                     self.segmenter.reset()
                     self.state.set_speech_active(False)
@@ -95,7 +101,7 @@ class AudioCapture:
                         except queue.Empty:
                             break
                     continue
-                self._handle_frame(frame, captured_muted)
+                self._handle_frame(frame, captured_muted, captured_at)
         except Exception as exc:
             if self._running:
                 self.error = str(exc)
@@ -104,7 +110,7 @@ class AudioCapture:
             self._running = False
             self.state.set_speech_active(False)
 
-    def _handle_frame(self, frame: np.ndarray, captured_muted=False):
+    def _handle_frame(self, frame: np.ndarray, captured_muted=False, captured_at=None):
         # Remember mute state at capture time as well as processing time.
         if captured_muted or self.state.mic_muted:
             self.segmenter.reset()
@@ -115,4 +121,6 @@ class AudioCapture:
         if segment is not None:
             log.info("Utterance ready (%.1fs)", len(segment) / AUDIO_SAMPLE_RATE)
             speaker, track_id = self.state.take_utterance_speaker()
-            put_drop_oldest(self.audio_queue, AudioSegment(segment, speaker, track_id))
+            dropped = put_drop_oldest(self.audio_queue, AudioSegment(segment, speaker, track_id, captured_at or time.time()))
+            if dropped and self.meeting:
+                self.meeting.gap('ASR input queue overflow; an utterance was discarded before recognition.')

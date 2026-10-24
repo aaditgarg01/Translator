@@ -18,8 +18,9 @@ Models are loaded once and reused (never relaunched per sentence).
 import threading
 import queue
 import time
+from collections import OrderedDict
 
-from config import TTS_ROUTES, TARGET_LANGUAGE, OUTPUT_SAMPLE_RATE
+from config import TTS_ROUTES, TARGET_LANGUAGE, OUTPUT_SAMPLE_RATE, TTS_CACHE_MAX_BYTES
 from tts.resample import resample_pcm
 from utils.queues import put_drop_oldest
 from utils.logging_utils import get_logger
@@ -39,6 +40,9 @@ class TTS:
         self._sbv2 = None
         self._running = False
         self._thread: threading.Thread | None = None
+        self._pcm_cache = OrderedDict()
+        self._cache_bytes = 0
+        self.cache_hits = 0
 
     # ── backends ─────────────────────────────────────────────────────
     def _engine_for(self, language: str) -> str:
@@ -111,11 +115,24 @@ class TTS:
     def _synthesize(self, text: str, language: str) -> bytes:
         started = time.monotonic()
         engine = self._engine_for(language)
+        key = (text, language, engine, OUTPUT_SAMPLE_RATE)
+        if key in self._pcm_cache:
+            self.cache_hits += 1
+            self._pcm_cache.move_to_end(key)
+            if self.state is not None:
+                self.state.record_latency('TTS', (time.monotonic() - started) * 1000)
+            return self._pcm_cache[key]
         backend = self._backend(engine)
         pcm, src_rate = backend.synth(text, language)
         if not pcm:
             return b""
         result = resample_pcm(pcm, src_rate, OUTPUT_SAMPLE_RATE)
+        if result and len(result) <= TTS_CACHE_MAX_BYTES:
+            self._pcm_cache[key] = result
+            self._cache_bytes += len(result)
+            while self._cache_bytes > TTS_CACHE_MAX_BYTES or len(self._pcm_cache) > 32:
+                _, removed = self._pcm_cache.popitem(last=False)
+                self._cache_bytes -= len(removed)
         if self.state is not None:
             self.state.record_latency("TTS", (time.monotonic() - started) * 1000)
         return result

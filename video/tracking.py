@@ -70,8 +70,8 @@ class FaceRegistry:
         )
 
     # ── detection / recognition ──────────────────────────────────────
-    def detect(self, frame: np.ndarray, min_size=None):
-        gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))
+    def detect(self, frame: np.ndarray, min_size=None, gray=None):
+        gray = cv2.equalizeHist(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if gray is None else gray)
         rects = self.face_cascade.detectMultiScale(
             gray,
             scaleFactor=FACE_DETECTION_SCALE_FACTOR,
@@ -80,8 +80,8 @@ class FaceRegistry:
         )
         return gray, rects
 
-    def identify(self, frame: np.ndarray, min_size=None) -> list[dict]:
-        gray, rects = self.detect(frame, min_size)
+    def identify(self, frame: np.ndarray, min_size=None, gray=None) -> list[dict]:
+        gray, rects = self.detect(frame, min_size, gray=gray)
         results = []
         for (x, y, w, h) in rects:
             roi = cv2.resize(gray[y:y + h, x:x + w], FACE_SAMPLE_SIZE)

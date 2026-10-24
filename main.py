@@ -43,6 +43,15 @@ class App:
         self.scene_queue = queue.Queue(maxsize=8)
         self._running = False
         self._started = []
+        self.meeting = None
+
+    def export_minutes(self):
+        if self.meeting is None:
+            log.info("Enable meeting minutes with --minutes or --minutes-only.")
+            return None
+        path = self.meeting.export()
+        log.info("Meeting minutes saved: %s", path)
+        return path
 
     # ── build ────────────────────────────────────────────────────────
     def build(self) -> None:
@@ -69,17 +78,17 @@ class App:
         if config.ENABLE_TRANSLATE:
             log.info("Loading translation libraries…")
             from translate.translator import Translator
-            self.components.append(("Translate", Translator(pipe.transcript, pipe.translation, state, self.scene_queue)))
+            self.components.append(("Translate", Translator(pipe.transcript, pipe.translation, state, self.scene_queue, self.meeting)))
 
         if config.ENABLE_WHISPER:
             log.info("Loading speech recognition libraries…")
             from whisper.engine import WhisperEngine
-            self.components.append(("Whisper", WhisperEngine(pipe.audio, pipe.transcript, state)))
+            self.components.append(("Whisper", WhisperEngine(pipe.audio, pipe.transcript, state, self.meeting)))
 
         if config.ENABLE_AUDIO:
             log.info("Loading microphone libraries…")
             from audio.capture import AudioCapture
-            self.components.append(("Audio", AudioCapture(pipe.audio, state)))
+            self.components.append(("Audio", AudioCapture(pipe.audio, state, self.meeting)))
 
         if config.ENABLE_VIDEO:
             log.info("Loading OpenCV and registered faces…")
@@ -103,7 +112,7 @@ class App:
 
     def stop(self) -> None:
         self._running = False
-        if not self._started and self.video is None:
+        if not self._started and self.video is None and self.meeting is None:
             return
         log.info("Shutting down…")
         if self.video is not None:
@@ -115,9 +124,18 @@ class App:
         for name, comp in reversed(self._started):
             try:
                 comp.stop()
+                if self.meeting and name == 'Translate' and comp._thread is not None and comp._thread.is_alive():
+                    self.meeting.gap('Translation was still in progress at shutdown; original transcripts are retained.')
             except Exception as exc:
                 log.error("Error stopping %s: %s", name, exc)
         self._started.clear()
+        if self.meeting is not None:
+            try:
+                path = self.meeting.close()
+                log.info("Meeting minutes saved: %s", path)
+            except Exception as exc:
+                log.error("Minutes export failed: %s. Recover from %s/transcript.jsonl with scripts/export_minutes.py.", exc, self.meeting.directory)
+            self.meeting = None
         log.info("Bye.")
 
     def _check_health(self):
@@ -137,18 +155,25 @@ class App:
             return
 
         import cv2
+        last_frame = None
         while self._running:
             self._check_health()
             frame = self.video.get_frame()
-            if frame is not None:
+            if frame is not None and frame is not last_frame:
                 cv2.imshow(config.WINDOW_NAME, frame)
-            key = cv2.waitKey(1) & 0xFF
+                last_frame = frame
+            key = cv2.waitKey(8) & 0xFF
             if key == ord("d"):
                 self.video.toggle_debug()
             if key == ord("s"):
                 self.video.save_debug_frame()
             if key == ord("t"):
                 self.video.toggle_scene_text()
+            if key == ord("m"):
+                try:
+                    self.export_minutes()
+                except OSError as exc:
+                    log.error("Minutes export failed: %s", exc)
             if key in (ord("q"), 27):     # q or ESC
                 break
         cv2.destroyAllWindows()
@@ -178,11 +203,29 @@ def parse_args(argv=None):
     parser.add_argument("--output-device", type=_device)
     parser.add_argument("--camera", type=int)
     parser.add_argument("--cpu", action="store_true", help="Use CPU inference for all models")
+    parser.add_argument("--minutes", action="store_true", help="Save transcript and meeting minutes locally")
+    parser.add_argument("--minutes-only", action="store_true", help="Record minutes without loading translation or TTS models")
+    parser.add_argument("--meeting-title", default="Meeting", help="Title used in meeting exports")
+    parser.add_argument("--minutes-dir", default=config.MINUTES_DIR, help="Parent directory for private session exports")
+    parser.add_argument("--performance", choices=["balanced", "eco"], default="balanced", help="Eco uses base Whisper, greedy ASR and smaller vision frames (accuracy tradeoff)")
+    parser.add_argument("--whisper-model", choices=["tiny", "base", "small", "medium", "large-v3"], help="Override the ASR model, including the eco preset")
+    parser.add_argument("--translation-int8", action=argparse.BooleanOptionalAction, default=None,
+                        help="Use lower-memory int8 NLLB Linear layers on CPU (eco default; accuracy may vary)")
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
+    if args.performance == "eco":
+        config.WHISPER_MODEL_SIZE = "base"
+        config.WHISPER_BEAM_SIZE = 1
+        config.VISION_WIDTH = 480
+        config.VISION_MAX_FPS = 10
+        config.NLLB_CPU_INT8 = True
+    if args.whisper_model:
+        config.WHISPER_MODEL_SIZE = args.whisper_model
+    if args.translation_int8 is not None:
+        config.NLLB_CPU_INT8 = args.translation_int8
     for argument, setting in (
         ("target", "TARGET_LANGUAGE"), ("source", "SOURCE_LANGUAGE"),
         ("stream", "STREAM_MODE"), ("input_device", "AUDIO_INPUT_DEVICE"),
@@ -205,6 +248,8 @@ def main(argv=None):
         config.ENABLE_VISUAL_SPEAKER = False
     if args.no_tts:
         config.ENABLE_TTS = config.ENABLE_STREAM = False
+    if args.minutes_only:
+        config.ENABLE_TRANSLATE = config.ENABLE_TTS = config.ENABLE_STREAM = False
     if args.cpu:
         config.WHISPER_DEVICE = config.NLLB_DEVICE = config.SBV2_DEVICE = "cpu"
         config.WHISPER_COMPUTE_TYPE = "int8"
@@ -220,6 +265,13 @@ def main(argv=None):
         issues = installation_issues()
         if issues:
             raise RuntimeError("Setup is incomplete:\n  " + "\n  ".join(issues))
+        if args.minutes or args.minutes_only:
+            if not config.ENABLE_AUDIO or not config.ENABLE_WHISPER:
+                raise ValueError("Meeting minutes require microphone capture and speech recognition enabled.")
+            from meeting.recorder import MeetingRecorder
+            app.meeting = MeetingRecorder(args.minutes_dir, args.meeting_title, config.SOURCE_LANGUAGE,
+                                          config.TARGET_LANGUAGE if config.ENABLE_TRANSLATE else None)
+            log.info("Meeting recording enabled: %s (M exports; exit finalises).", app.meeting.directory)
         app.build()
         app.start()
         app.loop()

@@ -20,6 +20,10 @@ def validate_config():
         raise ValueError("The speech pipeline requires 16000 Hz, 512-sample VAD frames, and mono audio")
     if config.VISION_WIDTH < 160 or config.VISION_MAX_FPS <= 0 or config.VIDEO_TARGET_FPS <= 0 or config.VISION_OPENCV_THREADS < 1:
         raise ValueError("Vision resolution and frame rates must be positive (width >= 160)")
+    if config.VISION_DETECT_INTERVAL < 1 or config.WHISPER_CPU_THREADS < 1 or config.WHISPER_BEAM_SIZE < 1:
+        raise ValueError('Detection interval, ASR CPU threads and beam size must be positive')
+    if config.TRANSLATION_CACHE_SIZE < 0 or config.TTS_CACHE_MAX_BYTES < 0:
+        raise ValueError('Translation and TTS cache sizes cannot be negative')
     if config.OUTPUT_SAMPLE_RATE <= 0:
         raise ValueError("OUTPUT_SAMPLE_RATE must be positive")
     if config.WHISPER_DEVICE not in {"auto", "cpu", "cuda"}:

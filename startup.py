@@ -9,7 +9,7 @@ from pathlib import Path
 import sys
 
 _DATALESS = 0x40000000  # Darwin SF_DATALESS; absent on Windows/Linux.
-_SOURCE_DIRS = ("audio", "stream", "translate", "tts", "utils", "video", "whisper")
+_SOURCE_DIRS = ("audio", "stream", "translate", "tts", "utils", "video", "whisper", "meeting")
 
 
 def require_local(path, *, recursive=False):

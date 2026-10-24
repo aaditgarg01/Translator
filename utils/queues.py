@@ -31,20 +31,24 @@ class Pipeline:
     pcm: "Queue"         = field(default_factory=lambda: Queue(maxsize=PCM_QUEUE_MAX))
 
 
-def put_drop_oldest(q: "Queue", item) -> None:
+def put_drop_oldest(q: "Queue", item) -> bool:
     """Put onto a bounded queue, dropping the oldest item if it is full.
 
     Real-time audio should never block the producer — if a downstream stage
     falls behind we'd rather lose the stalest item than freeze the mic.
+    Return True when an old or incoming item was discarded, for recording gaps.
     """
+    dropped = False
     try:
         q.put_nowait(item)
     except Full:
         try:
             q.get_nowait()
+            dropped = True
         except Empty:
             pass
         try:
             q.put_nowait(item)
         except Full:
-            pass
+            dropped = True
+    return dropped
