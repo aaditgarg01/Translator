@@ -27,15 +27,15 @@ class MinutesTests(unittest.TestCase):
             key = recorder.record_transcript(utterance(captured_at=recorder.started+10, duration_seconds=2))
             recorder.record_translation(key, 'カメラをテストすることにしました。', 'Japanese')
             path = recorder.close()
-            data = json.loads((path.parent/'minutes.json').read_text())
+            data = json.loads((path.parent/'minutes.json').read_text(encoding='utf-8'))
             self.assertEqual(data['participants'], ['Aadit'])
             entry = data['transcript'][0]
             self.assertEqual(entry['elapsed_seconds'], 8)
             self.assertEqual(entry['track_id'], 3)
             self.assertEqual(entry['translation'], 'カメラをテストすることにしました。')
             self.assertTrue((path.parent/'minutes.md').is_file())
-            self.assertIn('&lt;Demo&gt;', path.read_text())
-            self.assertNotIn('<Demo>', path.read_text())
+            self.assertIn('&lt;Demo&gt;', path.read_text(encoding='utf-8'))
+            self.assertNotIn('<Demo>', path.read_text(encoding='utf-8'))
             self.assertEqual(len(data['decision_candidates']), 1)
 
     def test_autosave_precedes_exports_and_recovers_out_of_order_translation(self):
@@ -46,7 +46,7 @@ class MinutesTests(unittest.TestCase):
             recorder.record_translation(first, '最初のポイント。', 'Japanese')
             self.assertFalse((recorder.directory/'minutes.html').exists())
             recover(recorder.directory/'transcript.jsonl')
-            data = json.loads((recorder.directory/'minutes.json').read_text())
+            data = json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))
             by_id = {e['id']:e for e in data['transcript']}
             self.assertEqual(by_id[first]['translation'], '最初のポイント。')
             self.assertIsNone(by_id[second]['translation'])
@@ -57,9 +57,9 @@ class MinutesTests(unittest.TestCase):
             recorder = MeetingRecorder(folder)
             recorder.record_transcript(utterance())
             recorder.export()
-            self.assertIsNone(json.loads((recorder.directory/'minutes.json').read_text())['meeting'].get('ended_at'))
+            self.assertIsNone(json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))['meeting'].get('ended_at'))
             recorder.close();recorder.close()
-            data = json.loads((recorder.directory/'minutes.json').read_text())
+            data = json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))
             self.assertIn('ended_at',data['meeting'])
             self.assertIsNone(recorder.record_transcript(utterance('Too late.')))
 
@@ -97,7 +97,7 @@ class MinutesTests(unittest.TestCase):
             path.write_bytes(b'{"kind":"session","title":"Recovered"}\n{"kind":"utterance","text":"\xe3\x81')
             recovered = recover(path)
             self.assertTrue(recovered.exists())
-            self.assertEqual(len(json.loads((Path(folder)/'minutes.json').read_text())['gaps']),1)
+            self.assertEqual(len(json.loads((Path(folder)/'minutes.json').read_text(encoding='utf-8'))['gaps']),1)
             path.write_text('{"kind":"session"}\nBROKEN\n')
             with self.assertRaises(ValueError):recover(path)
 
@@ -106,7 +106,7 @@ class MinutesTests(unittest.TestCase):
             path = Path(folder)/'minutes.md';path.write_text('previous minutes')
             with patch('meeting.recorder.os.replace',side_effect=OSError('disk full')):
                 with self.assertRaises(OSError):_atomic(path,'new minutes')
-            self.assertEqual(path.read_text(),'previous minutes')
+            self.assertEqual(path.read_text(encoding='utf-8'),'previous minutes')
             self.assertEqual(list(Path(folder).iterdir()),[path])
 
     def test_concurrent_writers_produce_valid_journal_and_separate_sessions(self):
@@ -118,7 +118,7 @@ class MinutesTests(unittest.TestCase):
             for worker in workers:worker.start()
             for worker in workers:worker.join()
             recorder.close();other.close()
-            data=json.loads((recorder.directory/'minutes.json').read_text())
+            data=json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))
             self.assertEqual(len(data['transcript']),30)
             self.assertEqual(recorder.directory.parent,Path(folder))
 
@@ -135,7 +135,7 @@ class MinutesTests(unittest.TestCase):
             with patch.object(translator,'_translate',return_value='translated'):
                 translator._handle(item)
             recorder.close()
-            data=json.loads((recorder.directory/'minutes.json').read_text())
+            data=json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))
             self.assertEqual(len(data['transcript']),2)
             self.assertEqual(sum(e['translation'] is not None for e in data['transcript']),1)
             self.assertEqual({e['speaker'] for e in data['transcript']},{'Alice'})
@@ -153,7 +153,7 @@ class MinutesTests(unittest.TestCase):
             with patch.object(translator,'_translate',return_value='camera translation'):
                 translator._handle_scene(dict(text='printed',language='en',on_result=lambda *a:None))
             recorder.close()
-            self.assertEqual(json.loads((recorder.directory/'minutes.json').read_text())['transcript'],[])
+            self.assertEqual(json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))['transcript'],[])
 
     def test_minutes_cli(self):
         args=parse_args(['--minutes-only','--meeting-title','Weekly Review','--performance','eco'])
@@ -185,7 +185,7 @@ class MinutesTests(unittest.TestCase):
                 self.assertEqual(capture.audio_queue.queue[0].captured_at,123)
                 capture._handle_frame(np.zeros(512,dtype='float32'),captured_at=124)
             recorder.close()
-            data=json.loads((recorder.directory/'minutes.json').read_text())
+            data=json.loads((recorder.directory/'minutes.json').read_text(encoding='utf-8'))
             self.assertEqual(len(data['gaps']),1)
             self.assertIn('ASR input queue overflow',data['gaps'][0]['reason'])
 
